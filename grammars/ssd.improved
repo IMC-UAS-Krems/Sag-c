@@ -1,0 +1,28 @@
+service:
+    name :: String
+    version :: Version
+    scope :: Scope
+
+data:
+    sources:
+        - <src-name>*:
+            type :: SourceType
+            provider :: Provider
+            url :: URL
+            query :: Query
+
+application:
+    type :: ApplicationType
+    layout :: Layout
+    visualizations:
+        - <viz-name>*:
+            type :: VizType
+            source :: <src-name>*
+            options :: Viz.Option
+
+deployment:
+    envs:
+        - <env-name>*:
+            type :: EnvironmentType
+            url :: URL
+            port :: Port

@@ -1,0 +1,32 @@
+service:
+    name is Point of Interest Barcelona
+    version is 1.0.0
+    scope is Culture
+
+data:
+    - source1:
+        name is Points of Interest
+        type is Sensor
+        provider is Fiware
+        uri is https://data.iiss.at/dataskop/fiwarenosec
+        query:
+            type is PointOfInterest
+        select name, location
+
+application:
+    type is WebApp
+    layout is SinglePage
+    roles is admin, user
+    visualization:
+        - Points of Interest Visualization
+            type is StreetMap
+            area: Barcelona, Spain
+            data:
+                source1: name, location
+
+deployment:
+    - test:
+        name is test
+        uri is http://localhost/test
+        port is 8652
+        type is Docker
