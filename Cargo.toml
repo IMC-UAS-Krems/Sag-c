@@ -12,3 +12,4 @@ strum = { version = "0.25.0", features = ["derive"] }
 serde = { version = "1.0.144", features = ["derive"] }
 url = { version = "2.4.0", features = ["serde"] }
 erased-serde = "0.3.31"
+lazy_static = "1.4.0"

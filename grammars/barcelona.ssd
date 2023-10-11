@@ -24,6 +24,12 @@ application:
             data:
                 source1: name, location
 
+        - Points of Interest Visualization2
+            type is StreetMap
+            area: Barcelona, Spain
+            data:
+                source1: name, location
+
 deployment:
     - test:
         name is test

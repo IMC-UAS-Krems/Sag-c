@@ -11,6 +11,12 @@ data:
             url :: URL
             query :: Query
 
+        - <src-name>*:
+            type :: SourceType
+            provider :: Provider
+            url :: URL
+            query :: Query
+
 application:
     type :: ApplicationType
     layout :: Layout
@@ -22,6 +28,11 @@ application:
 
 deployment:
     envs:
+        - <env-name>*:
+            type :: EnvironmentType
+            url :: URL
+            port :: Port
+
         - <env-name>*:
             type :: EnvironmentType
             url :: URL

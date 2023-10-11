@@ -1,17 +1,21 @@
 #![allow(unused)]
 #![feature(impl_trait_in_assoc_type)]
-#![feature(generators, generator_trait)]
 
-use std::ops::{Generator, GeneratorState};
-
-use core::iter::Map as IMap;
-use core::iter::Peekable;
+use core::iter::{
+    Map as IMap,
+    Peekable,
+};
 use erased_serde::serialize_trait_object;
 use serde::Serialize;
-use std::fmt::Debug;
-use std::rc::Rc;
-use std::sync::Arc;
-use strum_macros::{Display, EnumString};
+use std::{
+    fmt::Debug,
+    rc::Rc,
+    sync::Arc,
+};
+use strum_macros::{
+    Display,
+    EnumString,
+};
 use url::Url;
 
 // trait Parse<'c>: Sized {
@@ -41,14 +45,6 @@ impl<'c> Default for Block<'c> {
     }
 }
 
-impl<'c> Iterator for Block<'c> {
-    type Item = &'c str;
-
-    fn next(&mut self) -> Option<&'c str> {
-        self.lines.iter().next().copied()
-    }
-}
-
 struct Parser<'c, const INDENT_SIZE: u8 = 4> {
     line: u8,
     column: u8,
@@ -67,12 +63,15 @@ impl<'c, const I: u8> Parser<'c, I> {
     }
 
     fn lines(&self) -> impl Iterator<Item = (&'c str, u8)> {
-        self.content.lines().map(|line| {
-            // Count how many times the whitespace char ' ' appears at the beginning of the line
-            line.chars()
-                .take_while(|c| *c == ' ')
-                .fold((line, 0), |(line, indent), _| (line, (indent + 1)))
-        })
+        self.content
+            .lines()
+            // .filter(|line| !line.is_empty())
+            .map(|line| {
+                // Count how many times the whitespace char ' ' appears at the beginning of the line
+                line.chars()
+                    .take_while(|c| *c == ' ')
+                    .fold((line, 0), |(line, indent), _| (line, (indent + 1)))
+            })
     }
 
     fn next_block<T>(iter: &mut Peekable<T>) -> Option<(Block<'c>, &Peekable<T>)>
@@ -82,14 +81,10 @@ impl<'c, const I: u8> Parser<'c, I> {
         let indent = if let Some((_, indent)) = iter.peek() {
             Some(*indent / I)
         } else {
-            None
-        };
-
-        if let None = indent {
             return None;
         };
 
-        let indent = indent.unwrap();
+        let indent = indent.expect("Can safely unwrap");
 
         let mut lines = Vec::<&'c str>::default();
 
@@ -112,12 +107,27 @@ impl<'c, const I: u8> Parser<'c, I> {
         Some((Block::new(lines.into_iter()), iter))
     }
 
-    // fn blocks(&self) -> impl Iterator<Item = Block<'c>> {
-    //     let lines = self.lines();
-// 
-    //     let mut 
-// 
-    // }
+    fn blocks(&self) -> Vec<Block<'c>> {
+        let mut lines = self.lines().peekable();
+        let mut curr_block = None;
+        let mut blocks = vec![];
+        // let mut its = vec![];
+
+        loop {
+            curr_block = Self::next_block(&mut lines);
+
+            match curr_block {
+                None => break,
+                Some((block, rest)) => {
+                    blocks.push(block);
+                    let f = rest;
+                    // let _rest = rest.clone();
+                    // its.push(_rest);
+                }
+            }
+        }
+        blocks
+    }
 }
 
 /// Semantic version
@@ -353,16 +363,17 @@ struct SourceFile<'c> {
 }
 
 fn main() {
-    let parser = Parser::<'_, 4>::new(include_str!("../grammars/barcelona.ssd"));
+    type P = Parser<'static, 4>;
 
-    let mut lines = parser.lines().peekable();
+    let parser = P::new(include_str!("../grammars/ssd.improved"));
 
-    let next_block = Parser::<'_, 4>::next_block(&mut lines);
+    for block in parser.blocks() {
+        println!("Block");
+        println!("{:#?}", block);
 
-    match next_block {
-        None => {}
-        Some((block, rest)) => {
-            println!("{:#?}", block);
+        println!("Lines");
+        for line in block.lines.iter() {
+            println!("{}", line);
         }
-    };
+    }
 }
