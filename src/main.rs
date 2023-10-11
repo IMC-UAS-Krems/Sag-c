@@ -1,5 +1,6 @@
 #![allow(unused)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(associated_type_defaults)]
 
 use core::iter::{
     Map as IMap,
@@ -18,9 +19,14 @@ use strum_macros::{
 };
 use url::Url;
 
-// trait Parse<'c>: Sized {
-//     fn parse(input: &'c str) -> Self;
-// }
+type ParseResult<'c, O, E> = Result<(&'c str, O), E>;
+
+trait Parse<'c>: Sized {
+    type Output = Self;
+    type Error;
+
+    fn parse(input: &'c str) -> ParseResult<Self::Output, Self::Error>;
+}
 
 #[derive(Debug)]
 struct Block<'c> {
