@@ -136,6 +136,8 @@ impl<'c, const I: u8> Parser<'c, I> {
     }
 }
 
+// ! HERE STARTS THE PARSER CODE
+
 /// Semantic version
 #[derive(Debug, Default, Serialize)]
 struct Semantic {
@@ -367,6 +369,8 @@ struct SourceFile<'c> {
     application: ApplicationSection<'c>,
     deployment: DeploymentSection<'c>,
 }
+
+// ! HERE ENDS THE PARSER CODE
 
 fn main() {
     type P = Parser<'static, 4>;
