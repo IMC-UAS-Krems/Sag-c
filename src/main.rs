@@ -2,11 +2,26 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(associated_type_defaults)]
 
+use anyhow::Result;
 use core::iter::{
     Map as IMap,
     Peekable,
 };
 use erased_serde::serialize_trait_object;
+use nom::{
+    branch::alt,
+    bytes::streaming::tag,
+    character::complete::digit1,
+    combinator::{
+        map_res,
+        opt,
+    },
+    sequence::{
+        delimited,
+        tuple,
+    },
+    Err,
+};
 use serde::Serialize;
 use std::{
     fmt::Debug,
@@ -19,13 +34,12 @@ use strum_macros::{
 };
 use url::Url;
 
-type ParseResult<'c, O, E> = Result<(&'c str, O), E>;
+type ParseResult<'c, O> = Result<(&'c str, O)>;
 
 trait Parse<'c>: Sized {
     type Output = Self;
-    type Error;
 
-    fn parse(input: &'c str) -> ParseResult<Self::Output, Self::Error>;
+    fn parse(input: &'c str) -> ParseResult<Self::Output>;
 }
 
 #[derive(Debug)]
@@ -144,6 +158,25 @@ struct Semantic {
     major: u8,
     minor: u8,
     patch: u8,
+}
+
+impl<'c> Parse<'c> for Semantic {
+    fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
+        let (input, major) = map_res(digit1::<_, ()>, str::parse::<u8>)(input)?; /* turbofish is needed to disambiguate the multiple errors */
+        let (input, _) = tag::<_, _, ()>(".")(input)?;
+        let (input, minor) = map_res(digit1::<_, ()>, str::parse::<u8>)(input)?;
+        let (input, _) = tag::<&str, &str, ()>(".")(input)?;
+        let (input, patch) = map_res(digit1::<_, ()>, str::parse::<u8>)(input)?;
+
+        Ok((
+            input,
+            Semantic {
+                major,
+                minor,
+                patch,
+            },
+        ))
+    }
 }
 
 /// Version
