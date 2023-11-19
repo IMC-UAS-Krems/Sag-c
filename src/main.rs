@@ -11,21 +11,30 @@ use erased_serde::serialize_trait_object;
 use nom::{
     branch::alt,
     bytes::streaming::tag,
-    character::complete::digit1,
+    character::complete::{
+        alphanumeric1,
+        digit1,
+    },
     combinator::{
+        map,
         map_res,
         opt,
     },
+    error::Error as NomErr,
     sequence::{
         delimited,
         tuple,
     },
     Err,
+    IResult,
 };
 use serde::Serialize;
 use std::{
+    cell::RefCell,
+    default,
     fmt::Debug,
     rc::Rc,
+    str::FromStr,
     sync::Arc,
 };
 use strum_macros::{
@@ -34,12 +43,23 @@ use strum_macros::{
 };
 use url::Url;
 
-type ParseResult<'c, O> = Result<(&'c str, O)>;
+type ParseResult<'c, O> = IResult<&'c str, O>;
 
 trait Parse<'c>: Sized {
     type Output = Self;
 
-    fn parse(input: &'c str) -> ParseResult<Self::Output>;
+    fn parse(input: &'c str) -> ParseResult<'c, Self::Output>;
+}
+
+trait ParseEnum: FromStr {}
+
+impl<'c, T> Parse<'c> for T
+where
+    T: ParseEnum,
+{
+    fn parse(input: &'c str) -> ParseResult<Self::Output> {
+        map_res(alphanumeric1, Self::from_str)(input)
+    }
 }
 
 #[derive(Debug)]
@@ -94,7 +114,7 @@ impl<'c, const I: u8> Parser<'c, I> {
             })
     }
 
-    fn next_block<T>(iter: &mut Peekable<T>) -> Option<(Block<'c>, &Peekable<T>)>
+    fn next_block<T>(iter: &mut Peekable<T>) -> Option<(Block<'c>, Rc<RefCell<&mut Peekable<T>>>)>
     where
         T: Iterator<Item = (&'c str, u8)> + Sized,
     {
@@ -124,11 +144,12 @@ impl<'c, const I: u8> Parser<'c, I> {
             lines.push(content);
         }
 
-        Some((Block::new(lines.into_iter()), iter))
+        Some((Block::new(lines.into_iter()), Rc::from(RefCell::from(iter))))
     }
 
     fn blocks(&self) -> Vec<Block<'c>> {
         let mut lines = self.lines().peekable();
+        // let mut lines_ref = Rc::from(&mut lines);
         let mut curr_block = None;
         let mut blocks = vec![];
         // let mut its = vec![];
@@ -140,13 +161,16 @@ impl<'c, const I: u8> Parser<'c, I> {
                 None => break,
                 Some((block, rest)) => {
                     blocks.push(block);
-                    let f = rest;
-                    // let _rest = rest.clone();
-                    // its.push(_rest);
+                    // let f = rest;
+                    // let rest = rest.clone();
+                    println!("{:#?}", rest.borrow_mut().collect::<Vec<_>>());
+                    // its.push(Rc::clone(&rest));
                 }
             }
         }
         blocks
+
+        // todo!()
     }
 }
 
@@ -162,11 +186,13 @@ struct Semantic {
 
 impl<'c> Parse<'c> for Semantic {
     fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
-        let (input, major) = map_res(digit1::<_, ()>, str::parse::<u8>)(input)?; /* turbofish is needed to disambiguate the multiple errors */
-        let (input, _) = tag::<_, _, ()>(".")(input)?;
-        let (input, minor) = map_res(digit1::<_, ()>, str::parse::<u8>)(input)?;
-        let (input, _) = tag::<&str, &str, ()>(".")(input)?;
-        let (input, patch) = map_res(digit1::<_, ()>, str::parse::<u8>)(input)?;
+        let (input, (major, _, minor, _, patch)) = tuple((
+            map_res(digit1, str::parse::<u8>),
+            tag("."),
+            map_res(digit1, str::parse::<u8>),
+            tag("."),
+            map_res(digit1, str::parse::<u8>),
+        ))(input)?;
 
         Ok((
             input,
@@ -186,6 +212,18 @@ impl<'c> Parse<'c> for Semantic {
 enum Version {
     Simple(u8),
     Semantic(Semantic),
+}
+
+impl<'c> Parse<'c> for Version {
+    fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
+        match Semantic::parse(input) {
+            Ok((input, semantic)) => Ok((input, Version::Semantic(semantic))),
+            Err(_) => {
+                let (input, simple) = map_res(digit1, str::parse::<u8>)(input)?;
+                Ok((input, Version::Simple(simple)))
+            }
+        }
+    }
 }
 
 /// Scope
@@ -209,6 +247,8 @@ enum Scope {
     Infrastructure,
 }
 
+impl ParseEnum for Scope {}
+
 /// Service Section
 ///
 /// - name: name of the service
@@ -227,11 +267,15 @@ enum SourceType {
     SmartMeter,
 }
 
+impl ParseEnum for SourceType {}
+
 /// IoT Provider
 #[derive(Debug, Serialize, EnumString, Display)]
 enum Provider {
     Fiware,
 }
+
+impl ParseEnum for Provider {}
 
 /// URL
 #[allow(clippy::upper_case_acronyms)]
@@ -278,6 +322,8 @@ enum ApplicationType {
     Server,
 }
 
+impl ParseEnum for ApplicationType {}
+
 /// Layout
 #[derive(Debug, Serialize, EnumString, Display)]
 enum Layout {
@@ -285,6 +331,8 @@ enum Layout {
     Horizontal,
     Vertical,
 }
+
+impl ParseEnum for Layout {}
 
 /// Defines the options for a visualization
 trait Opt: Debug + erased_serde::Serialize {}
@@ -376,9 +424,18 @@ enum EnvironmentType {
     Test,
 }
 
+impl ParseEnum for EnvironmentType {}
+
 /// Port
 #[derive(Debug, Serialize)]
 struct Port(u32);
+
+impl Parse<'_> for Port {
+    fn parse(input: &str) -> ParseResult<Self> {
+        let (input, port) = map_res(digit1, str::parse::<u32>)(input)?;
+        Ok((input, Port(port)))
+    }
+}
 
 /// Environment
 #[derive(Debug, Serialize)]
@@ -406,17 +463,24 @@ struct SourceFile<'c> {
 // ! HERE ENDS THE PARSER CODE
 
 fn main() {
-    type P = Parser<'static, 4>;
+    // type P = Parser<'static, 4>;
+    //
+    // let parser = P::new(include_str!("../grammars/ssd.improved"));
+    //
+    // for block in parser.blocks() {
+    //     println!("Block");
+    //     println!("{:#?}", block);
+    //
+    //     println!("Lines");
+    //     for line in block.lines.iter() {
+    //         println!("{}", line);
+    //     }
+    // }
 
-    let parser = P::new(include_str!("../grammars/ssd.improved"));
+    let s = Version::parse("1.2.3");
 
-    for block in parser.blocks() {
-        println!("Block");
-        println!("{:#?}", block);
-
-        println!("Lines");
-        for line in block.lines.iter() {
-            println!("{}", line);
-        }
+    match s {
+        Ok(s) => println!("{:#?}", s),
+        Err(e) => println!("{:#?}", e),
     }
 }
