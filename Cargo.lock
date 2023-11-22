@@ -109,6 +109,7 @@ dependencies = [
  "lazy_static",
  "nom",
  "serde",
+ "set_field",
  "strum",
  "strum_macros",
  "url",
@@ -130,6 +131,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4eca7ac642d82aa35b60049a6eccb4be6be75e599bd2e9adb5f875a737654af2"
 dependencies = [
  "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "set_field"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cbb8f909feb422d44eb0be01fe67993517aa109fc0f6f0367333e8eee027eae"
+dependencies = [
+ "set_field_macro",
+]
+
+[[package]]
+name = "set_field_macro"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "046f9dbd987a4f4d0adcea1df2e5037519610a037bd7dd1188811a4fa79183f8"
+dependencies = [
  "quote",
  "syn",
 ]

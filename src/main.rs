@@ -10,7 +10,12 @@ use core::iter::{
 use erased_serde::serialize_trait_object;
 use nom::{
     branch::alt,
-    bytes::streaming::tag,
+    bytes::streaming::{
+        tag,
+        take_till1,
+        take_until1,
+        take_while1,
+    },
     character::complete::{
         alphanumeric1,
         digit1,
@@ -21,6 +26,7 @@ use nom::{
         opt,
     },
     error::Error as NomErr,
+    multi::separated_list1,
     sequence::{
         delimited,
         tuple,
@@ -29,10 +35,12 @@ use nom::{
     IResult,
 };
 use serde::Serialize;
+use set_field::SetField;
 use std::{
     cell::RefCell,
     default,
     fmt::Debug,
+    process::Output,
     rc::Rc,
     str::FromStr,
     sync::Arc,
@@ -176,8 +184,23 @@ impl<'c, const I: u8> Parser<'c, I> {
 
 // ! HERE STARTS THE PARSER CODE
 
+#[derive(Debug, Serialize)]
+struct Str(Rc<str>);
+
+impl Str {
+    fn new(s: &str) -> Self {
+        Self(Rc::from(s))
+    }
+}
+
+impl Default for Str {
+    fn default() -> Self {
+        Self(Rc::from(""))
+    }
+}
+
 /// Semantic version
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, SetField)]
 struct Semantic {
     major: u8,
     minor: u8,
@@ -214,6 +237,12 @@ enum Version {
     Semantic(Semantic),
 }
 
+impl Default for Version {
+    fn default() -> Self {
+        Version::Simple(0)
+    }
+}
+
 impl<'c> Parse<'c> for Version {
     fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
         match Semantic::parse(input) {
@@ -228,8 +257,9 @@ impl<'c> Parse<'c> for Version {
 
 /// Scope
 /// Any of the allowed scopes for a service
-#[derive(Debug, Serialize, EnumString, Display)]
+#[derive(Debug, Serialize, EnumString, Display, Default)]
 enum Scope {
+    #[default]
     Service,
     Industry,
     Manifacturing,
@@ -254,24 +284,26 @@ impl ParseEnum for Scope {}
 /// - name: name of the service
 /// - version: version of the service
 /// - scope: scope of the service
-#[derive(Debug, Serialize)]
-struct ServiceSection<'c> {
-    name: &'c str,
+#[derive(Debug, Serialize, SetField, Default)]
+struct ServiceSection {
+    name: Str,
     version: Version,
     scope: Scope,
 }
 
 /// Source Type
-#[derive(Debug, Serialize, EnumString, Display)]
+#[derive(Debug, Serialize, EnumString, Display, Default)]
 enum SourceType {
+    #[default]
     SmartMeter,
 }
 
 impl ParseEnum for SourceType {}
 
 /// IoT Provider
-#[derive(Debug, Serialize, EnumString, Display)]
+#[derive(Debug, Serialize, EnumString, Display, Default)]
 enum Provider {
+    #[default]
     Fiware,
 }
 
@@ -282,11 +314,58 @@ impl ParseEnum for Provider {}
 #[derive(Debug, Serialize)]
 struct URL(Url);
 
+impl Default for URL {
+    fn default() -> Self {
+        URL(Url::parse("https://fiware.org").unwrap())
+    }
+}
+
+impl<'c> Parse<'c> for URL {
+    fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
+        let (input, url) = map_res(alphanumeric1, Url::parse)(input)?;
+        Ok((input, URL(url)))
+    }
+}
+
+// TODO! PARSE
+
+// MAKE VEC PARSE
+
+impl<'c, T> Parse<'c> for Vec<T>
+where
+    T: Parse<'c, Output = T>,
+{
+    fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
+        let (input, items) = delimited(
+            opt(tag(" ")),
+            separated_list1(tag(", "), T::parse),
+            opt(tag(" ")),
+        )(input)?;
+
+        Ok((input, items))
+    }
+}
+
+// MAKE ASSIGNMENT PARSE
+
 /// Query
 ///
 /// Represents how data is transformed from the source
-#[derive(Debug, Serialize)]
-struct Query<'c>(&'c str);
+#[derive(Debug, Serialize, Default)]
+struct Query(Str);
+
+impl<'c> Query {
+    fn new(content: &'c str) -> Self {
+        Self(Str::new(content))
+    }
+}
+
+impl<'c> Parse<'c> for Query {
+    fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
+        let (input, query) = take_till1(|c| c == ' ' || c == '\n')(input)?;
+        Ok((input, Query(Str::new(query))))
+    }
+}
 
 /// Source
 ///
@@ -295,27 +374,27 @@ struct Query<'c>(&'c str);
 /// - provider: provider of the source
 /// - url: url of the source
 /// - query: (optional) query that transforms the data
-#[derive(Debug, Serialize)]
-struct Source<'c> {
-    name: &'c str,
+#[derive(Debug, Serialize, SetField, Default)]
+struct Source {
+    name: Str,
     r#type: SourceType,
     provider: Provider,
     url: URL,
-    query: Option<Query<'c>>,
+    query: Option<Query>,
 }
 
 /// Data Section
 ///
 /// - sources: list of sources
-#[derive(Debug, Serialize)]
-struct DataSection<'c> {
-    #[serde(borrow)]
-    sources: Vec<Source<'c>>,
+#[derive(Debug, Serialize, SetField, Default)]
+struct DataSection {
+    sources: Vec<Source>,
 }
 
 /// Application Type
-#[derive(Debug, Serialize, EnumString, Display)]
+#[derive(Debug, Serialize, EnumString, Display, Default)]
 enum ApplicationType {
+    #[default]
     Web,
     Mobile,
     Desktop,
@@ -325,8 +404,9 @@ enum ApplicationType {
 impl ParseEnum for ApplicationType {}
 
 /// Layout
-#[derive(Debug, Serialize, EnumString, Display)]
+#[derive(Debug, Serialize, EnumString, Display, Default)]
 enum Layout {
+    #[default]
     SinglePage,
     Horizontal,
     Vertical,
@@ -399,28 +479,34 @@ where
     Chart(V),
 }
 
+impl Default for VizType<Table, Map, Chart> {
+    fn default() -> Self {
+        Self::Table(Table)
+    }
+}
+
 /// Visualization
-#[derive(Debug, Serialize)]
-struct Visualization<'c> {
-    name: &'c str,
+#[derive(Debug, Serialize, SetField, Default)]
+struct Visualization {
+    name: Str,
     r#type: VizType<Table, Map, Chart>,
-    source: Vec<&'c str>,
-    options: Box<dyn Opt>,
+    source: Vec<Str>,
 }
 
 /// Application Section
-#[derive(Debug, Serialize)]
-struct ApplicationSection<'c> {
+#[derive(Debug, Serialize, SetField, Default)]
+struct ApplicationSection {
     r#type: ApplicationType,
     layout: Layout,
-    visualizations: Vec<Visualization<'c>>,
+    visualizations: Vec<Visualization>,
 }
 
 /// Environment Type
-#[derive(Debug, Serialize, EnumString, Display)]
+#[derive(Debug, Serialize, EnumString, Display, Default)]
 enum EnvironmentType {
     Production,
     Development,
+    #[default]
     Test,
 }
 
@@ -430,6 +516,12 @@ impl ParseEnum for EnvironmentType {}
 #[derive(Debug, Serialize)]
 struct Port(u32);
 
+impl Default for Port {
+    fn default() -> Self {
+        Self(8080)
+    }
+}
+
 impl Parse<'_> for Port {
     fn parse(input: &str) -> ParseResult<Self> {
         let (input, port) = map_res(digit1, str::parse::<u32>)(input)?;
@@ -438,26 +530,26 @@ impl Parse<'_> for Port {
 }
 
 /// Environment
-#[derive(Debug, Serialize)]
-struct Environment<'c> {
-    name: &'c str,
+#[derive(Debug, Serialize, SetField, Default)]
+struct Environment {
+    name: Str,
     r#type: EnvironmentType,
     port: Port,
 }
 
 /// Deployment Section
-#[derive(Debug, Serialize)]
-struct DeploymentSection<'c> {
-    environments: Vec<Environment<'c>>,
+#[derive(Debug, Serialize, SetField, Default)]
+struct DeploymentSection {
+    environments: Vec<Environment>,
 }
 
 /// Source File
-#[derive(Debug, Serialize)]
-struct SourceFile<'c> {
-    service: ServiceSection<'c>,
-    data: DataSection<'c>,
-    application: ApplicationSection<'c>,
-    deployment: DeploymentSection<'c>,
+#[derive(Debug, Serialize, SetField, Default)]
+struct SourceFile {
+    service: ServiceSection,
+    data: DataSection,
+    application: ApplicationSection,
+    deployment: DeploymentSection,
 }
 
 // ! HERE ENDS THE PARSER CODE
@@ -477,10 +569,18 @@ fn main() {
     //     }
     // }
 
-    let s = Version::parse("1.2.3");
+    // let s = Version::parse("1.2.3");
+    //
+    // match s {
+    //     Ok(s) => println!("{:#?}", s),
+    //     Err(e) => println!("{:#?}", e),
+    // }
 
-    match s {
-        Ok(s) => println!("{:#?}", s),
-        Err(e) => println!("{:#?}", e),
-    }
+    let (input, result): (&str, Vec<Port>) = Vec::parse("8080, 8081, 8082 ").unwrap();
+
+    println!(
+        "Rest: {:#?}\nPorts: {:#?}",
+        input,
+        result.iter().map(|p| p.0).collect::<Vec<_>>()
+    );
 }
