@@ -261,6 +261,26 @@ struct ServiceSection<'c> {
     scope: Scope,
 }
 
+impl<'c> Parse<'c> for ServiceSection<'c> {
+    fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
+        ///needs testing
+        let (input, _) = tag("service:")(input)?;
+        let (input, name) = tag("name")(input)?;
+        ///this will need to be changed after a function is added for the "is" statements
+        let (input, version) = Version::parse(input)?;
+        let (input, scope) = Scope::parse(input)?;
+
+        Ok((
+            input,
+            Self {
+                name,
+                version,
+                scope,
+            },
+        ))
+    }
+}
+
 /// Source Type
 #[derive(Debug, Serialize, EnumString, Display)]
 enum SourceType {
@@ -304,6 +324,29 @@ struct Source<'c> {
     query: Option<Query<'c>>,
 }
 
+impl<'c> Parse<'c> for Source<'c> {
+    fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
+        let (input, _) = tag("Source")(input)?;
+
+        let (input, name) = tag("name:")(input)?;
+        let (input, r#type) = SourceType::parse(input)?;
+        let (input, provider) = Provider::parse(input)?;
+        let (input, url) = URL::parse(input)?;
+        let (input, query) = opt(tag("query:"))(input)?;
+
+        Ok((
+            input,
+            Source {
+                name,
+                r#type,
+                provider,
+                url,
+                query,
+            },
+        ))
+    }
+}
+
 /// Data Section
 ///
 /// - sources: list of sources
@@ -311,6 +354,16 @@ struct Source<'c> {
 struct DataSection<'c> {
     #[serde(borrow)]
     sources: Vec<Source<'c>>,
+}
+
+impl<'c> Parse<'c> for DataSection<'c> {
+    fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
+        let (input, sources) = list::<NamedType>(input)?;
+        ///needs to be implemented
+        let sources = sources.to_vec();
+
+        Ok((input, DataSection { sources }))
+    }
 }
 
 /// Application Type
