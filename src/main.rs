@@ -29,6 +29,7 @@ use nom::{
     multi::separated_list1,
     sequence::{
         delimited,
+        pair,
         tuple,
     },
     Err,
@@ -40,7 +41,7 @@ use std::{
     cell::RefCell,
     default,
     fmt::Debug,
-    process::Output,
+    marker::PhantomData,
     rc::Rc,
     str::FromStr,
     sync::Arc,
@@ -139,7 +140,7 @@ impl<'c, const I: u8> Parser<'c, I> {
         lines.push(iter.next().unwrap().0);
 
         loop {
-            if let None = iter.peek() {
+            if iter.peek().is_none() {
                 break;
             }
 
@@ -196,6 +197,58 @@ impl Str {
 impl Default for Str {
     fn default() -> Self {
         Self(Rc::from(""))
+    }
+}
+
+#[derive(Debug, Serialize, Default)]
+struct Assignment<'c, T>
+where
+    T: Parse<'c>,
+{
+    name: Str,
+    value: T,
+    #[serde(skip)]
+    _c: PhantomData<&'c T>,
+}
+
+impl<'c, T> Assignment<'c, T>
+where
+    T: Parse<'c>,
+{
+    fn new(name: &str, value: T) -> Self {
+        Self {
+            name: Str::new(name),
+            value,
+            _c: PhantomData,
+        }
+    }
+}
+
+fn parse_name(input: &str) -> ParseResult<'_, &str> {
+    let (input, (name, _)) = pair(
+        take_till1(|c| c == ' ' || c == '\n'),
+        take_while1(|c| c != ' ' && c != '\n'),
+    )(input)?;
+    Ok((input, name))
+}
+
+fn parse_equals(input: &str) -> ParseResult<'_, ()> {
+    let (input, _) = pair(
+        alt((tag("="), tag(":"), tag("is"))),
+        take_while1(|c| c != ' ' && c != '\n'),
+    )(input)?;
+
+    Ok((input, ()))
+}
+
+impl<'c, T> Parse<'c> for Assignment<'c, T>
+where
+    T: Parse<'c, Output = T>,
+{
+    fn parse(input: &'c str) -> ParseResult<'c, Self::Output> {
+        let (input, (name, _, value)) = tuple((parse_name, parse_equals, T::parse))(input)?;
+
+        Ok((name, Self::new(name, value)))
     }
 }
 
