@@ -1,6 +1,6 @@
 [package]
 name = "sagc"
-version = "0.4.1"
+version = "0.4.5"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -15,3 +15,4 @@ erased-serde = "0.3.31"
 lazy_static = "1.4.0"
 anyhow = "1.0.75"
 set_field = "0.1.1"
+serde_json = "1.0.108"

@@ -2,6 +2,9 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(associated_type_defaults)]
 
+#[macro_use]
+mod rc_macro;
+
 use anyhow::Result;
 use core::iter::{
     Map as IMap,
@@ -35,6 +38,7 @@ use nom::{
     Err,
     IResult,
 };
+
 use serde::Serialize;
 use set_field::SetField;
 use std::{
@@ -225,18 +229,13 @@ where
 }
 
 fn parse_name(input: &str) -> ParseResult<'_, &str> {
-    let (input, (name, _)) = pair(
-        take_till1(|c| c == ' ' || c == '\n'),
-        take_while1(|c| c != ' ' && c != '\n'),
-    )(input)?;
+    let (input, (name, _)) = pair(take_till1(|c| c == ' ' || c == '\n'), tag(" "))(input)?;
+
     Ok((input, name))
 }
 
 fn parse_equals(input: &str) -> ParseResult<'_, ()> {
-    let (input, _) = pair(
-        alt((tag("="), tag(":"), tag("is"))),
-        take_while1(|c| c != ' ' && c != '\n'),
-    )(input)?;
+    let (input, _) = pair(alt((tag("="), tag(":"), tag("is"))), tag(" "))(input)?;
 
     Ok((input, ()))
 }
@@ -379,8 +378,6 @@ impl<'c> Parse<'c> for URL {
         Ok((input, URL(url)))
     }
 }
-
-// TODO! PARSE
 
 // MAKE VEC PARSE
 
@@ -629,11 +626,16 @@ fn main() {
     //     Err(e) => println!("{:#?}", e),
     // }
 
-    let (input, result): (&str, Vec<Port>) = Vec::parse("8080, 8081, 8082 ").unwrap();
+    // let (input, result): (&str, Vec<Port>) = Vec::parse("8080, 8081, 8082 ").unwrap();
+    //
+    // println!(
+    //     "Rest: {:#?}\nPorts: {:#?}",
+    //     input,
+    //     result.iter().map(|p| p.0).collect::<Vec<_>>()
+    // );
 
-    println!(
-        "Rest: {:#?}\nPorts: {:#?}",
-        input,
-        result.iter().map(|p| p.0).collect::<Vec<_>>()
-    );
+    let (input, assignment): (&str, Assignment<'_, Version>) =
+        Assignment::<'_, Version>::parse("a is 1.0.0 ").unwrap();
+
+    println!("{assignment:#?}");
 }
