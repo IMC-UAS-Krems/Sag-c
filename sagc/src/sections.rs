@@ -187,7 +187,7 @@ pub enum EnvironmentType {
 }
 
 impl<'a> Config<'a> {
-    pub fn new(blocks: &Blocks<'a>) -> Result<Config<'a>, SagError> {
+    pub fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
         let data = blocks
             .get("data")
             .ok_or(SagError::missing_section("data"))?;
@@ -223,52 +223,12 @@ impl<'a> Config<'a> {
     /// Validate that all datasources referenced in the application panels are defined
     fn validate_datasources(config: &Config) -> Result<(), SagError> {
         for (panel_name, panel) in config.application.panels.iter() {
-            match panel {
-                PanelTypeUnion::PieChart(pie_chart) => {
-                    if config.data_sources.get(pie_chart.source).is_none() {
-                        return Err(SagError::parsing_error(
-                            panel_name,
-                            "source",
-                            format!("invalid source: {}", pie_chart.source),
-                        ));
-                    }
-                }
-                PanelTypeUnion::TimeSeries(time_series) => {
-                    if config.data_sources.get(time_series.source).is_none() {
-                        return Err(SagError::parsing_error(
-                            panel_name,
-                            "source",
-                            format!("invalid source: {}", time_series.source),
-                        ));
-                    }
-                }
-                PanelTypeUnion::BarChart(bar_chart) => {
-                    if config.data_sources.get(bar_chart.source).is_none() {
-                        return Err(SagError::parsing_error(
-                            panel_name,
-                            "source",
-                            format!("invalid source: {}", bar_chart.source),
-                        ));
-                    }
-                }
-                PanelTypeUnion::GeoMap(geo_map) => {
-                    if config.data_sources.get(geo_map.source).is_none() {
-                        return Err(SagError::parsing_error(
-                            panel_name,
-                            "source",
-                            format!("invalid source: {}", geo_map.source),
-                        ));
-                    }
-                }
-                PanelTypeUnion::XYChart(xy_chart) => {
-                    if config.data_sources.get(xy_chart.source).is_none() {
-                        return Err(SagError::parsing_error(
-                            panel_name,
-                            "source",
-                            format!("invalid source: {}", xy_chart.source),
-                        ));
-                    }
-                }
+            if config.data_sources.get(panel.get_source()).is_none() {
+                return Err(SagError::parsing_error(
+                    panel_name,
+                    "source",
+                    format!("invalid source: {}", panel.get_source()),
+                ));
             }
         }
         Ok(())
@@ -276,7 +236,7 @@ impl<'a> Config<'a> {
 }
 
 impl<'a> Service<'a> {
-    fn new(blocks: &Blocks<'a>) -> Result<Service<'a>, SagError> {
+    fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
         let block = blocks
             .get("service")
             .ok_or(SagError::missing_section("service"))?;
@@ -305,16 +265,16 @@ impl<'a> Service<'a> {
 }
 
 impl<'a> Test<'a> {
-    fn new(block: &Value<'a>) -> Result<Test<'a>, SagError> {
-        let one = parse!(block, &str, "test", "one");
-        let two = parse!(block, &str, "test", "two");
+    fn new(block: &Value<'a>) -> Result<Self, SagError> {
+        let one = parse!(block, &str, "service.test", "one");
+        let two = parse!(block, &str, "service.test", "two");
 
         Ok(Test { one, two })
     }
 }
 
 impl<'a> Datasource<'a> {
-    fn new(blocks: &Blocks<'a>, name: &'a str) -> Result<Datasource<'a>, SagError> {
+    fn new(blocks: &Blocks<'a>, name: &'a str) -> Result<Self, SagError> {
         let block = blocks.get(name).ok_or(SagError::missing_section(name))?;
 
         let provider = parse!(block, &str, name, "provider");
@@ -337,7 +297,7 @@ impl<'a> Datasource<'a> {
 }
 
 impl<'a> Application<'a> {
-    fn new(blocks: &Blocks<'a>) -> Result<Application<'a>, SagError> {
+    fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
         let block = blocks
             .get("application")
             .ok_or(SagError::missing_section("application"))?;
@@ -384,7 +344,7 @@ impl<'a> Application<'a> {
 }
 
 impl<'a> GeoMap<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<GeoMap<'a>, SagError> {
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
         let block = blocks
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
@@ -407,7 +367,7 @@ impl<'a> GeoMap<'a> {
 }
 
 impl<'a> PieChart<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<PieChart<'a>, SagError> {
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
         let block = blocks
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
@@ -438,7 +398,7 @@ impl<'a> PieChart<'a> {
 }
 
 impl<'a> BarChart<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<BarChart<'a>, SagError> {
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
         let block = blocks
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
@@ -459,7 +419,7 @@ impl<'a> BarChart<'a> {
 }
 
 impl<'a> TimeSeries<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<TimeSeries<'a>, SagError> {
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
         let block = blocks
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
@@ -480,7 +440,7 @@ impl<'a> TimeSeries<'a> {
 }
 
 impl<'a> XYChart<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<XYChart<'a>, SagError> {
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
         let block = blocks
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
@@ -501,7 +461,7 @@ impl<'a> XYChart<'a> {
 }
 
 impl<'a> Deployment<'a> {
-    fn new(blocks: &Blocks<'a>) -> Result<Deployment<'a>, SagError> {
+    fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
         let block = blocks
             .get("deployment")
             .ok_or(SagError::missing_section("deployment"))?;
@@ -522,7 +482,7 @@ impl<'a> Deployment<'a> {
 }
 
 impl<'a> Environment<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Environment<'a>, SagError> {
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
         let block = blocks
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
@@ -531,15 +491,9 @@ impl<'a> Environment<'a> {
         let port = parse!(block, &str, block_name, "port");
         let r#type = parse!(block, &str, block_name, "type");
 
-        let port = port.parse::<i32>();
-        let port = match port {
-            Ok(port) => Ok(port),
-            Err(_) => Err(SagError::parsing_error(
-                block_name,
-                "port",
-                "port is not an integer",
-            )),
-        }?;
+        let port = port
+            .parse::<i32>()
+            .map_err(|_| SagError::parsing_error(block_name, "port", "port is not an integer"))?;
 
         Ok(Environment {
             uri,
@@ -547,6 +501,46 @@ impl<'a> Environment<'a> {
             r#type: EnvironmentType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
         })
+    }
+}
+
+// Panel implementation
+
+trait Panel {
+    fn get_source(&self) -> &str;
+    fn get_label(&self) -> &str;
+    fn get_traces(&self) -> &Vec<&str>;
+}
+
+impl<'a> Panel for PanelTypeUnion<'a> {
+    fn get_source(&self) -> &str {
+        match self {
+            PanelTypeUnion::GeoMap(map) => map.source,
+            PanelTypeUnion::XYChart(xy) => xy.source,
+            PanelTypeUnion::PieChart(pie) => pie.source,
+            PanelTypeUnion::BarChart(bar) => bar.source,
+            PanelTypeUnion::TimeSeries(ts) => ts.source,
+        }
+    }
+
+    fn get_label(&self) -> &str {
+        match self {
+            PanelTypeUnion::GeoMap(map) => map.label,
+            PanelTypeUnion::XYChart(xy) => xy.label,
+            PanelTypeUnion::PieChart(pie) => pie.label,
+            PanelTypeUnion::BarChart(bar) => bar.label,
+            PanelTypeUnion::TimeSeries(ts) => ts.label,
+        }
+    }
+
+    fn get_traces(&self) -> &Vec<&str> {
+        match self {
+            PanelTypeUnion::GeoMap(map) => &map.data,
+            PanelTypeUnion::XYChart(xy) => &xy.traces,
+            PanelTypeUnion::PieChart(pie) => &pie.traces,
+            PanelTypeUnion::BarChart(bar) => &bar.traces,
+            PanelTypeUnion::TimeSeries(ts) => &ts.traces,
+        }
     }
 }
 
@@ -583,12 +577,12 @@ impl FromStr for Version {
 
         match versions {
             Ok((_, versions)) => {
-                if versions.len() != 3 {
-                    return Err(format!("invalid version: {}", s));
-                }
-                let major = versions[0];
-                let minor = versions[1];
-                let patch = versions[2];
+                // if versions.len() != 3 {
+                //     return Err(format!("invalid version: {}", s));
+                // }
+                let major = versions.get(0).map_or(0, |v| *v);
+                let minor = versions.get(1).map_or(0, |v| *v);
+                let patch = versions.get(2).map_or(0, |v| *v);
 
                 Ok(Version {
                     major,
@@ -650,7 +644,7 @@ impl FromStr for Layout {
 
 impl FromStr for PanelType {
     type Err = String;
-    fn from_str(input: &str) -> Result<PanelType, Self::Err> {
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input {
             "pie_chart" => Ok(PanelType::PieChart),
             "timeseries" => Ok(PanelType::TimeSeries),
@@ -664,7 +658,7 @@ impl FromStr for PanelType {
 
 impl FromStr for PieChartType {
     type Err = String;
-    fn from_str(input: &str) -> Result<PieChartType, Self::Err> {
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input {
             "pie" => Ok(PieChartType::Pie),
             "donut" => Ok(PieChartType::Donut),
