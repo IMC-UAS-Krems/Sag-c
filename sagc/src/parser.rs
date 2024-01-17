@@ -1,4 +1,5 @@
 use crate::{errors::SagError, sections::Config};
+use nom::character::complete::space1;
 use nom::error::context;
 use nom::{
     branch::alt,
@@ -46,22 +47,6 @@ impl<'a> TryInto<Vec<&'a str>> for &Value<'a> {
     }
 }
 
-impl<'a> TryInto<i32> for &Value<'a> {
-    type Error = &'a str;
-    fn try_into(self) -> Result<i32, Self::Error> {
-        match self {
-            Value::String(value) => {
-                let value = value.parse::<i32>();
-                match value {
-                    Ok(value) => Ok(value),
-                    Err(_) => Err("value is specified in a wrong format"),
-                }
-            }
-            _ => Err("value is specified in a wrong format"),
-        }
-    }
-}
-
 fn parse_name(input: &str) -> IResult<&str> {
     let (input, result) = recognize(many1_count(alt((alpha1, tag("_")))))(input)?;
     Ok((input, result))
@@ -73,7 +58,10 @@ fn parse_section_name(input: &str) -> IResult<&str> {
 }
 
 fn parse_vec(input: &str) -> IResult<Value> {
-    let (input, items) = separated_list0(alt((tag(", "), tag(","))), alphanumeric1)(input)?;
+    let (input, items) = separated_list0(
+        alt((tag(", "), tag(","))),
+        recognize(many1_count(alt((alphanumeric1, space1, tag("."))))),
+    )(input)?;
 
     Ok((input, Value::Vec(items)))
 }
@@ -138,18 +126,6 @@ pub fn parse_lines(input: &str) -> Result<Blocks, SagError> {
             last_blocks.push(name);
             continue;
         }
-        // parse indent
-        // let line = match multispace0::<_, Error<&str>>(line) {
-        //     Ok((input, _)) => input,
-        //     Err(e) => {
-        //         match e {
-        //             Err::Error(e) | Err::Failure(e) => {
-        //                 return Err(SagError::invalid_char(line_n, line_len - e.input.len()));
-        //             }
-        //             _ => unreachable!(),
-        //         };
-        //     }
-        // };
 
         //parse line in block
         match parse_line(line) {
@@ -178,62 +154,9 @@ pub fn parse_lines(input: &str) -> Result<Blocks, SagError> {
             }
         };
     }
-    dbg!(&blocks);
+    // dbg!(&blocks);
     Ok(blocks)
 }
-
-// pub fn parse_lines(input: &str) -> Result<Blocks, SagError> {
-//     let lines = input.lines();
-//     let mut blocks: Blocks = HashMap::new();
-//     let mut last_block: Option<&str> = None;
-//
-//     for (line_n, line) in lines.enumerate() {
-//         let line_len = line.len();
-//
-//         // pasre section name
-//         if let Ok((_, name)) = parse_section_name(line) {
-//             blocks.insert(name, HashMap::new());
-//             last_block = Some(name);
-//             continue;
-//         }
-//         // parse indent
-//         let line = match multispace0::<_, Error<&str>>(line) {
-//             Ok((input, _)) => input,
-//             Err(e) => {
-//                 match e {
-//                     Err::Error(e) | Err::Failure(e) => {
-//                         return Err(SagError::invalid_char(line_n, line_len - e.input.len()));
-//                     }
-//                     _ => unreachable!(),
-//                 };
-//             }
-//         };
-//         if line.is_empty() {
-//             continue;
-//         }
-//
-//         //parse line in block
-//         match parse_line(line) {
-//             Ok((input, (name, line))) => {
-//                 if !input.is_empty() {
-//                     return Err(SagError::invalid_char(line_n, line_len - input.len()));
-//                 }
-//                 if let Some(block) = last_block {
-//                     blocks.get_mut(block).unwrap().insert(name, line);
-//                 }
-//             }
-//             Err(e) => {
-//                 match e {
-//                     Err::Error(e) | Err::Failure(e) => {
-//                         return Err(SagError::invalid_char(line_n, line_len - e.input.len()));
-//                     }
-//                     _ => unreachable!(),
-//                 };
-//             }
-//         };
-//     }
-//     Ok(blocks)
-// }
 
 pub fn parse_input(input: &str) -> Result<Config<'_>, SagError> {
     let blocks = match parse_lines(input) {

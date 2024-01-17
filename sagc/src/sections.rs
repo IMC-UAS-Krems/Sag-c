@@ -10,7 +10,6 @@ use crate::errors::SagError;
 use crate::parse;
 use crate::parser::Blocks;
 use crate::parser::Value;
-use sagc_derive::Block;
 
 #[derive(Debug)]
 pub struct Config<'a> {
@@ -21,35 +20,18 @@ pub struct Config<'a> {
     pub deployment: Deployment<'a>,
 }
 
-#[derive(Debug, Block)]
+#[derive(Debug)]
 pub struct Service<'a> {
     pub title: &'a str, // called "name" for Dash, can be 'name' also in this case
-
-    #[treat_as(&'a str)]
     pub scope: Scope,
-
-    #[treat_as(&'a str)]
     pub version: Version,
-
     pub test: Option<Test<'a>>,
 }
 
-#[derive(Debug, Block)]
+#[derive(Debug)]
 pub struct Test<'a> {
     pub one: &'a str,
     pub two: &'a str,
-}
-
-impl<'a> TryFrom<&Value<'a>> for Test<'a> {
-    type Error = SagError;
-
-    fn try_from(block: &Value<'a>) -> Result<Self, Self::Error> {
-        let values = Test::get_fields_from_block(block, "test")?;
-        Ok(Test {
-            one: values.0,
-            two: values.1,
-        })
-    }
 }
 
 #[derive(Debug)]
@@ -78,17 +60,11 @@ pub struct Version {
     pub patch: i16,
 }
 
-#[derive(Debug, Block)]
+#[derive(Debug)]
 pub struct Datasource<'a> {
-    #[treat_as(&'a str)]
     pub provider: Provider,
-
-    #[treat_as(&'a str)]
     pub r#type: SourceType,
-
-    #[treat_as(&'a str)]
     pub uri: Url,
-
     pub query: &'a str,
 }
 
@@ -104,17 +80,11 @@ pub enum SourceType {
     Sensor,
 }
 
-#[derive(Debug, Block)]
+#[derive(Debug)]
 pub struct Application<'a> {
-    #[treat_as(&'a str)]
     pub r#type: ApplicationType,
-
-    #[treat_as(&'a str)]
     pub layout: Layout,
-
     pub roles: Vec<&'a str>,
-
-    #[treat_as(Vec<&'a str>)]
     pub panels: HashMap<&'a str, PanelTypeUnion<'a>>, // called 'visualizations' for Dash, e.g. <name>: <visualization>
 }
 
@@ -151,32 +121,21 @@ pub enum PanelType {
     XYChart,
 }
 
-#[derive(Debug, Block)]
+#[derive(Debug)]
 pub struct GeoMap<'a> {
     pub label: &'a str,
-
-    #[treat_as(&'a str)]
     pub r#type: PanelType,
-
     pub source: &'a str,
-
     pub data: Vec<&'a str>,
-
     pub area: Option<&'a str>,
 }
 
-#[derive(Debug, Block)]
+#[derive(Debug)]
 pub struct PieChart<'a> {
     pub label: &'a str,
-
-    #[treat_as(&'a str)]
     pub r#type: PanelType,
-
     pub source: &'a str,
-
     pub traces: Vec<&'a str>,
-
-    #[treat_as(Option<&'a str>)]
     pub pie_chart_type: Option<PieChartType>,
 }
 
@@ -186,55 +145,39 @@ pub enum PieChartType {
     Donut,
 }
 
-#[derive(Debug, Block)]
+#[derive(Debug)]
 pub struct BarChart<'a> {
     pub label: &'a str,
-
-    #[treat_as(&'a str)]
     pub r#type: PanelType,
-
     pub source: &'a str,
-
     pub traces: Vec<&'a str>,
 }
 
-#[derive(Debug, Block)]
+#[derive(Debug)]
 pub struct TimeSeries<'a> {
     pub label: &'a str,
-
-    #[treat_as(&'a str)]
     pub r#type: PanelType,
-
     pub source: &'a str,
-
     pub traces: Vec<&'a str>,
 }
 
-#[derive(Debug, Block)]
+#[derive(Debug)]
 pub struct XYChart<'a> {
     pub label: &'a str,
-
-    #[treat_as(&'a str)]
     pub r#type: PanelType,
-
     pub source: &'a str,
-
     pub traces: Vec<&'a str>,
 }
 
-#[derive(Debug, Block)]
+#[derive(Debug)]
 pub struct Deployment<'a> {
-    #[treat_as(Vec<&'a str>)]
     pub environments: HashMap<&'a str, Environment<'a>>,
 }
 
-#[derive(Debug, Block, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Environment<'a> {
     pub uri: &'a str,
-
     pub port: i32,
-
-    #[treat_as(&'a str)]
     pub r#type: EnvironmentType,
 }
 
@@ -334,40 +277,75 @@ impl<'a> Config<'a> {
 
 impl<'a> Service<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Service<'a>, SagError> {
-        let fields = Service::get_fields_from_blocks(blocks, "service")?;
+        let block = blocks
+            .get("service")
+            .ok_or(SagError::missing_section("service"))?;
+
+        let title = parse!(block, &str, "service", "title");
+        let scope = parse!(block, &str, "service", "scope");
+        let version = parse!(block, &str, "service", "version");
+
+        let test = match block {
+            Value::Block(block) => match block.get("test") {
+                Some(value) => Some(Test::new(value)?),
+                None => None,
+            },
+            _ => unreachable!(),
+        };
 
         Ok(Service {
-            title: fields.0,
-            scope: Scope::from_str(fields.1)
+            title,
+            scope: Scope::from_str(scope)
                 .map_err(|e| SagError::parsing_error("service", "scope", e))?,
-            version: Version::from_str(fields.2)
+            version: Version::from_str(version)
                 .map_err(|e| SagError::parsing_error("service", "version", e))?,
-            test: fields.3,
+            test,
         })
+    }
+}
+
+impl<'a> Test<'a> {
+    fn new(block: &Value<'a>) -> Result<Test<'a>, SagError> {
+        let one = parse!(block, &str, "test", "one");
+        let two = parse!(block, &str, "test", "two");
+
+        Ok(Test { one, two })
     }
 }
 
 impl<'a> Datasource<'a> {
     fn new(blocks: &Blocks<'a>, name: &'a str) -> Result<Datasource<'a>, SagError> {
-        let fields = Datasource::get_fields_from_blocks(blocks, name)?;
+        let block = blocks.get(name).ok_or(SagError::missing_section(name))?;
+
+        let provider = parse!(block, &str, name, "provider");
+        let r#type = parse!(block, &str, name, "type");
+        let uri = parse!(block, &str, name, "uri");
+        let query = parse!(block, &str, name, "query");
+
         Ok(Datasource {
-            provider: Provider::from_str(fields.0)
+            provider: Provider::from_str(provider)
                 .map_err(|e| SagError::parsing_error("datasource", "provider", e))?,
-            r#type: SourceType::from_str(fields.1).map_err(|e| {
+            r#type: SourceType::from_str(r#type).map_err(|e| {
                 SagError::parsing_error("datasource", "type", format!("invalid type: {}", e))
             })?,
-            uri: Url::parse(fields.2).map_err(|e| {
+            uri: Url::parse(uri).map_err(|e| {
                 SagError::parsing_error("datasource", "uri", format!("invalid uri: {}", e))
             })?,
-            query: fields.3,
+            query,
         })
     }
 }
 
 impl<'a> Application<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Application<'a>, SagError> {
-        let (r#type, layout, roles, panels) =
-            Application::get_fields_from_blocks(blocks, "application")?;
+        let block = blocks
+            .get("application")
+            .ok_or(SagError::missing_section("application"))?;
+
+        let r#type = parse!(block, &str, "application", "type");
+        let layout = parse!(block, &str, "application", "layout");
+        let roles = parse!(block, Vec<&str>, "application", "roles");
+        let panels = parse!(block, Vec<&str>, "application", "panels");
 
         let mut panels_map = HashMap::new();
 
@@ -407,24 +385,40 @@ impl<'a> Application<'a> {
 
 impl<'a> GeoMap<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<GeoMap<'a>, SagError> {
-        let fields = GeoMap::get_fields_from_blocks(blocks, block_name)?;
+        let block = blocks
+            .get(block_name)
+            .ok_or(SagError::missing_section(block_name))?;
+
+        let label = parse!(block, &str, block_name, "label");
+        let r#type = parse!(block, &str, block_name, "type");
+        let source = parse!(block, &str, block_name, "source");
+        let data = parse!(block, Vec<&str>, block_name, "data");
+        let area = parse!(block, Option<&str>, block_name, "label");
 
         Ok(GeoMap {
-            label: fields.0,
-            r#type: PanelType::from_str(fields.1)
+            label,
+            r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
-            source: fields.2,
-            data: fields.3,
-            area: fields.4,
+            source,
+            data,
+            area,
         })
     }
 }
 
 impl<'a> PieChart<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<PieChart<'a>, SagError> {
-        let fields = PieChart::get_fields_from_blocks(blocks, block_name)?;
+        let block = blocks
+            .get(block_name)
+            .ok_or(SagError::missing_section(block_name))?;
 
-        let pie_chart_type = match fields.4 {
+        let label = parse!(block, &str, block_name, "label");
+        let r#type = parse!(block, &str, block_name, "type");
+        let source = parse!(block, &str, block_name, "source");
+        let traces = parse!(block, Vec<&str>, block_name, "traces");
+        let pie_chart_type = parse!(block, Option<&str>, block_name, "pie_chart_type");
+
+        let pie_chart_type = match pie_chart_type {
             Some(pie_chart_type) => Some(
                 PieChartType::from_str(pie_chart_type)
                     .map_err(|e| SagError::parsing_error(block_name, "pie_chart_type", e))?,
@@ -433,11 +427,11 @@ impl<'a> PieChart<'a> {
         };
 
         Ok(PieChart {
-            label: fields.0,
-            r#type: PanelType::from_str(fields.1)
+            label,
+            r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
-            source: fields.2,
-            traces: fields.3,
+            source,
+            traces,
             pie_chart_type,
         })
     }
@@ -445,49 +439,74 @@ impl<'a> PieChart<'a> {
 
 impl<'a> BarChart<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<BarChart<'a>, SagError> {
-        let fields = BarChart::get_fields_from_blocks(blocks, block_name)?;
+        let block = blocks
+            .get(block_name)
+            .ok_or(SagError::missing_section(block_name))?;
+
+        let label = parse!(block, &str, block_name, "label");
+        let r#type = parse!(block, &str, block_name, "type");
+        let source = parse!(block, &str, block_name, "source");
+        let traces = parse!(block, Vec<&str>, block_name, "traces");
 
         Ok(BarChart {
-            label: fields.0,
-            r#type: PanelType::from_str(fields.1)
+            label,
+            r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
-            source: fields.2,
-            traces: fields.3,
+            source,
+            traces,
         })
     }
 }
 
 impl<'a> TimeSeries<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<TimeSeries<'a>, SagError> {
-        let fields = TimeSeries::get_fields_from_blocks(blocks, block_name)?;
+        let block = blocks
+            .get(block_name)
+            .ok_or(SagError::missing_section(block_name))?;
+
+        let label = parse!(block, &str, block_name, "label");
+        let r#type = parse!(block, &str, block_name, "type");
+        let source = parse!(block, &str, block_name, "source");
+        let traces = parse!(block, Vec<&str>, block_name, "traces");
 
         Ok(TimeSeries {
-            label: fields.0,
-            r#type: PanelType::from_str(fields.1)
+            label,
+            r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
-            source: fields.2,
-            traces: fields.3,
+            source,
+            traces,
         })
     }
 }
 
 impl<'a> XYChart<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<XYChart<'a>, SagError> {
-        let fields = XYChart::get_fields_from_blocks(blocks, block_name)?;
+        let block = blocks
+            .get(block_name)
+            .ok_or(SagError::missing_section(block_name))?;
+
+        let label = parse!(block, &str, block_name, "label");
+        let r#type = parse!(block, &str, block_name, "type");
+        let source = parse!(block, &str, block_name, "source");
+        let traces = parse!(block, Vec<&str>, block_name, "traces");
 
         Ok(XYChart {
-            label: fields.0,
-            r#type: PanelType::from_str(fields.1)
+            label,
+            r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
-            source: fields.2,
-            traces: fields.3,
+            source,
+            traces,
         })
     }
 }
 
 impl<'a> Deployment<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Deployment<'a>, SagError> {
-        let (environments,) = Deployment::get_fields_from_blocks(blocks, "deployment")?;
+        let block = blocks
+            .get("deployment")
+            .ok_or(SagError::missing_section("deployment"))?;
+
+        let environments = parse!(block, Vec<&str>, "deployment", "environments");
 
         let mut environments_map = HashMap::new();
         for environment_name in environments {
@@ -504,11 +523,28 @@ impl<'a> Deployment<'a> {
 
 impl<'a> Environment<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Environment<'a>, SagError> {
-        let fields = Environment::get_fields_from_blocks(blocks, block_name)?;
+        let block = blocks
+            .get(block_name)
+            .ok_or(SagError::missing_section(block_name))?;
+
+        let uri = parse!(block, &str, block_name, "uri");
+        let port = parse!(block, &str, block_name, "port");
+        let r#type = parse!(block, &str, block_name, "type");
+
+        let port = port.parse::<i32>();
+        let port = match port {
+            Ok(port) => Ok(port),
+            Err(_) => Err(SagError::parsing_error(
+                block_name,
+                "port",
+                "port is not an integer",
+            )),
+        }?;
+
         Ok(Environment {
-            uri: fields.0,
-            port: fields.1,
-            r#type: EnvironmentType::from_str(fields.2)
+            uri,
+            port,
+            r#type: EnvironmentType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
         })
     }

@@ -11,6 +11,7 @@ async fn grafana(input: String) -> Result<impl Responder, SagError> {
     let result = parse_input(input.as_str());
     match result {
         Ok(grafana) => {
+            // dbg!(&grafana);
             let grafana: Grafana = Grafana::from(grafana);
             Ok(Json(grafana))
         }
