@@ -15,7 +15,7 @@ use crate::parser::Value;
 pub struct Config<'a> {
     pub service: Service<'a>,
     /// e.g. `<name>: <datasource>`
-    pub data_sources: HashMap<&'a str, Datasource<'a>>,
+    pub data: SagData<'a>,
     pub application: Application<'a>,
     pub deployment: Deployment<'a>,
 }
@@ -58,6 +58,11 @@ pub struct Version {
     pub major: i16,
     pub minor: i16,
     pub patch: i16,
+}
+
+#[derive(Debug)]
+pub struct SagData<'a> {
+    pub sources: HashMap<&'a str, Datasource<'a>>,
 }
 
 #[derive(Debug)]
@@ -188,30 +193,15 @@ pub enum EnvironmentType {
 
 impl<'a> Config<'a> {
     pub fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
-        let data = blocks
-            .get("data")
-            .ok_or(SagError::missing_section("data"))?;
-
-        match data {
-            Value::Block(_) => (),
-            _ => return Err(SagError::error("data section is not a block")),
-        }
-
-        let data_sources = parse!(data, Vec<&str>, "data", "sources");
-
         let service: Service = Service::new(blocks)?;
-        let mut data_sources_map: HashMap<&str, Datasource> = HashMap::new();
 
-        for name in data_sources {
-            data_sources_map.insert(name, Datasource::new(blocks, name)?);
-        }
-
+        let data = SagData::new(blocks)?;
         let application: Application = Application::new(blocks)?;
         let deployment: Deployment = Deployment::new(blocks)?;
 
         let config = Config {
             service,
-            data_sources: data_sources_map,
+            data,
             application,
             deployment,
         };
@@ -228,10 +218,10 @@ impl<'a> Config<'a> {
     /// Validate that all datasources referenced in the application panels are defined
     fn validate_datasources(config: &Config) -> Result<(), SagError> {
         for (panel_name, panel) in config.application.panels.iter() {
-            if config.data_sources.get(panel.get_source()).is_none() {
+            if config.data.sources.get(panel.get_source()).is_none() {
                 return Err(SagError::parsing_error(
                     panel_name,
-                    "source",
+                    Some("source"),
                     format!("invalid source: {}", panel.get_source()),
                 ));
             }
@@ -242,33 +232,42 @@ impl<'a> Config<'a> {
 
 impl<'a> Service<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
-        let block = blocks
-            .get("service")
-            .ok_or(SagError::missing_section("service"))?;
+        const SECTION_NAME: &str = "service";
 
-        match block {
-            Value::Block(_) => (),
-            _ => return Err(SagError::error("service section is not a block")),
+        let block = blocks
+            .get(SECTION_NAME)
+            .ok_or(SagError::missing_section(SECTION_NAME))?;
+
+        if !block.is_block() {
+            return Err(SagError::parsing_error(
+                SECTION_NAME,
+                None,
+                "service section is not a block",
+            ));
         }
 
-        let title = parse!(block, &str, "service", "title");
-        let scope = parse!(block, &str, "service", "scope");
-        let version = parse!(block, &str, "service", "version");
+        let title = parse!(block, &str, SECTION_NAME, "title");
+        let scope = parse!(block, &str, SECTION_NAME, "scope");
+        let version = parse!(block, &str, SECTION_NAME, "version");
 
         let test = match block {
             Value::Block(block) => match block.get("test") {
                 Some(value) => Some(Test::new(value)?),
                 None => None,
             },
-            _ => return Err(SagError::error("service section is not a block")),
+            _ => {
+                return Err(SagError::error(format!(
+                    "{SECTION_NAME} section is not a block"
+                )))
+            }
         };
 
         Ok(Service {
             title,
             scope: Scope::from_str(scope)
-                .map_err(|e| SagError::parsing_error("service", "scope", e))?,
+                .map_err(|e| SagError::parsing_error(SECTION_NAME, Some("scope"), e))?,
             version: Version::from_str(version)
-                .map_err(|e| SagError::parsing_error("service", "version", e))?,
+                .map_err(|e| SagError::parsing_error(SECTION_NAME, Some("version"), e))?,
             test,
         })
     }
@@ -283,28 +282,58 @@ impl<'a> Test<'a> {
     }
 }
 
-impl<'a> Datasource<'a> {
-    fn new(blocks: &Blocks<'a>, name: &'a str) -> Result<Self, SagError> {
-        let block = blocks.get(name).ok_or(SagError::missing_section(name))?;
+impl<'a> SagData<'a> {
+    fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
+        const SECTION_NAME: &str = "data";
 
-        match block {
-            Value::Block(_) => (),
-            _ => return Err(SagError::error("datasource section is not a block")),
+        let data = blocks
+            .get(SECTION_NAME)
+            .ok_or(SagError::missing_section(SECTION_NAME))?;
+
+        let mut data_sources_map: HashMap<&str, Datasource> = HashMap::new();
+
+        if !data.is_block() {
+            return Err(SagError::error(format!(
+                "{SECTION_NAME} section is not a block"
+            )));
         }
 
-        let provider = parse!(block, &str, name, "provider");
-        let r#type = parse!(block, &str, name, "type");
-        let uri = parse!(block, &str, name, "uri");
-        let query = parse!(block, &str, name, "query");
+        let data_sources = parse!(data, Vec<&str>, SECTION_NAME, "sources");
+        for name in data_sources {
+            data_sources_map.insert(name, Datasource::new(blocks, name)?);
+        }
+
+        Ok(SagData {
+            sources: data_sources_map,
+        })
+    }
+}
+
+impl<'a> Datasource<'a> {
+    fn new(blocks: &Blocks<'a>, source_name: &'a str) -> Result<Self, SagError> {
+        let block = blocks
+            .get(source_name)
+            .ok_or(SagError::missing_section(source_name))?;
+
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{source_name} section is not a block"
+            )));
+        }
+
+        let provider = parse!(block, &str, source_name, "provider");
+        let r#type = parse!(block, &str, source_name, "type");
+        let uri = parse!(block, &str, source_name, "uri");
+        let query = parse!(block, &str, source_name, "query");
 
         Ok(Datasource {
             provider: Provider::from_str(provider)
-                .map_err(|e| SagError::parsing_error("datasource", "provider", e))?,
+                .map_err(|e| SagError::parsing_error(source_name, Some("provider"), e))?,
             r#type: SourceType::from_str(r#type).map_err(|e| {
-                SagError::parsing_error("datasource", "type", format!("invalid type: {}", e))
+                SagError::parsing_error(source_name, Some("type"), format!("invalid type: {}", e))
             })?,
             uri: Url::parse(uri).map_err(|e| {
-                SagError::parsing_error("datasource", "uri", format!("invalid uri: {}", e))
+                SagError::parsing_error(source_name, Some("uri"), format!("invalid uri: {}", e))
             })?,
             query,
         })
@@ -313,13 +342,16 @@ impl<'a> Datasource<'a> {
 
 impl<'a> Application<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
-        let block = blocks
-            .get("application")
-            .ok_or(SagError::missing_section("application"))?;
+        const SECTION_NAME: &str = "application";
 
-        match block {
-            Value::Block(_) => (),
-            _ => return Err(SagError::error("application section is not a block")),
+        let block = blocks
+            .get(SECTION_NAME)
+            .ok_or(SagError::missing_section(SECTION_NAME))?;
+
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{SECTION_NAME} section is not a block"
+            )));
         }
 
         let r#type = parse!(block, &str, "application", "type");
@@ -334,19 +366,16 @@ impl<'a> Application<'a> {
                 .get(panel_name)
                 .ok_or(SagError::missing_section(panel_name))?;
 
-            match panel {
-                Value::Block(_) => (),
-                _ => {
-                    return Err(SagError::error(format!(
-                        "{panel_name} section is not a block"
-                    )))
-                }
+            if !panel.is_block() {
+                return Err(SagError::error(format!(
+                    "{panel_name} section is not a block"
+                )));
             }
 
             let panel_type = parse!(panel, &str, panel_name, "type");
 
             let panel_type = PanelType::from_str(panel_type)
-                .map_err(|e| SagError::parsing_error(panel_name, "type", e))?;
+                .map_err(|e| SagError::parsing_error(panel_name, Some("type"), e))?;
 
             let panel_type_union = match panel_type {
                 PanelType::PieChart => PanelTypeUnion::PieChart(PieChart::new(blocks, panel_name)?),
@@ -363,9 +392,9 @@ impl<'a> Application<'a> {
 
         Ok(Application {
             r#type: ApplicationType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error("application", "type", e))?,
+                .map_err(|e| SagError::parsing_error(SECTION_NAME, Some("type"), e))?,
             layout: Layout::from_str(layout)
-                .map_err(|e| SagError::parsing_error("application", "layout", e))?,
+                .map_err(|e| SagError::parsing_error(SECTION_NAME, Some("layout"), e))?,
             roles: roles.to_owned(),
             panels: panels_map,
         })
@@ -378,13 +407,10 @@ impl<'a> GeoMap<'a> {
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
 
-        match block {
-            Value::Block(_) => (),
-            _ => {
-                return Err(SagError::error(format!(
-                    "{block_name} section is not a block"
-                )))
-            }
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{block_name} section is not a block"
+            )));
         }
 
         let label = parse!(block, &str, block_name, "label");
@@ -396,7 +422,7 @@ impl<'a> GeoMap<'a> {
         Ok(GeoMap {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
+                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
             data,
             area,
@@ -410,13 +436,10 @@ impl<'a> PieChart<'a> {
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
 
-        match block {
-            Value::Block(_) => (),
-            _ => {
-                return Err(SagError::error(format!(
-                    "{block_name} section is not a block"
-                )))
-            }
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{block_name} section is not a block"
+            )));
         }
 
         let label = parse!(block, &str, block_name, "label");
@@ -428,7 +451,7 @@ impl<'a> PieChart<'a> {
         let pie_chart_type = match pie_chart_type {
             Some(pie_chart_type) => Some(
                 PieChartType::from_str(pie_chart_type)
-                    .map_err(|e| SagError::parsing_error(block_name, "pie_chart_type", e))?,
+                    .map_err(|e| SagError::parsing_error(block_name, Some("pie_chart_type"), e))?,
             ),
             None => None,
         };
@@ -436,7 +459,7 @@ impl<'a> PieChart<'a> {
         Ok(PieChart {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
+                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
             traces,
             pie_chart_type,
@@ -450,13 +473,10 @@ impl<'a> BarChart<'a> {
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
 
-        match block {
-            Value::Block(_) => (),
-            _ => {
-                return Err(SagError::error(format!(
-                    "{block_name} section is not a block"
-                )))
-            }
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{block_name} section is not a block"
+            )));
         }
 
         let label = parse!(block, &str, block_name, "label");
@@ -467,7 +487,7 @@ impl<'a> BarChart<'a> {
         Ok(BarChart {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
+                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
             traces,
         })
@@ -480,13 +500,10 @@ impl<'a> TimeSeries<'a> {
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
 
-        match block {
-            Value::Block(_) => (),
-            _ => {
-                return Err(SagError::error(format!(
-                    "{block_name} section is not a block"
-                )))
-            }
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{block_name} section is not a block"
+            )));
         }
 
         let label = parse!(block, &str, block_name, "label");
@@ -497,7 +514,7 @@ impl<'a> TimeSeries<'a> {
         Ok(TimeSeries {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
+                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
             traces,
         })
@@ -510,13 +527,10 @@ impl<'a> XYChart<'a> {
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
 
-        match block {
-            Value::Block(_) => (),
-            _ => {
-                return Err(SagError::error(format!(
-                    "{block_name} section is not a block"
-                )))
-            }
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{block_name} section is not a block"
+            )));
         }
 
         let label = parse!(block, &str, block_name, "label");
@@ -527,7 +541,7 @@ impl<'a> XYChart<'a> {
         Ok(XYChart {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
+                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
             traces,
         })
@@ -536,16 +550,19 @@ impl<'a> XYChart<'a> {
 
 impl<'a> Deployment<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
-        let block = blocks
-            .get("deployment")
-            .ok_or(SagError::missing_section("deployment"))?;
+        const SECTION_NAME: &str = "deployment";
 
-        match block {
-            Value::Block(_) => (),
-            _ => return Err(SagError::error("deployment section is not a block")),
+        let block = blocks
+            .get(SECTION_NAME)
+            .ok_or(SagError::missing_section(SECTION_NAME))?;
+
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{SECTION_NAME} section is not a block"
+            )));
         }
 
-        let environments = parse!(block, Vec<&str>, "deployment", "environments");
+        let environments = parse!(block, Vec<&str>, SECTION_NAME, "environments");
 
         let mut environments_map = HashMap::new();
         for environment_name in environments {
@@ -566,28 +583,25 @@ impl<'a> Environment<'a> {
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
 
-        match block {
-            Value::Block(_) => (),
-            _ => {
-                return Err(SagError::error(format!(
-                    "{block_name} section is not a block"
-                )))
-            }
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{block_name} section is not a block"
+            )));
         }
 
         let uri = parse!(block, &str, block_name, "uri");
         let port = parse!(block, &str, block_name, "port");
         let r#type = parse!(block, &str, block_name, "type");
 
-        let port = port
-            .parse::<i32>()
-            .map_err(|_| SagError::parsing_error(block_name, "port", "port is not an integer"))?;
+        let port = port.parse::<i32>().map_err(|_| {
+            SagError::parsing_error(block_name, Some("port"), "port is not an integer")
+        })?;
 
         Ok(Environment {
             uri,
             port,
             r#type: EnvironmentType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
+                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
         })
     }
 }

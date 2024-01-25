@@ -261,7 +261,8 @@ impl<'a> From<Config<'a>> for Grafana {
         // Map Config fields to Grafana fields
         let service = config.service.into();
         let data_sources = config
-            .data_sources
+            .data
+            .sources
             .into_iter()
             .map(|(name, datasource)| {
                 let grafana_datasource = datasource.into();

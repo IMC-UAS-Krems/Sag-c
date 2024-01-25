@@ -156,7 +156,8 @@ impl<'a> From<Config<'a>> for Dash {
         // Map Config fields to Dash fields
         let service = config.service.into();
         let data_sources = config
-            .data_sources
+            .data
+            .sources
             .into_iter()
             .map(|(name, datasource)| {
                 let traces = get_traces_with_data_source_name(name, &config.application.panels);
