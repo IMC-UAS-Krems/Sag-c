@@ -15,7 +15,7 @@ pub struct InvalidChar {
 pub struct ParsingError {
     error: ParsingErrorKind,
     section: String,
-    field: Option<String>,
+    field: String,
 }
 
 #[derive(Debug)]
@@ -31,7 +31,7 @@ struct WebError {
 }
 
 impl SagError {
-    pub fn parsing_error<T: ToString>(section: &str, field: Option<&str>, error: T) -> Self {
+    pub fn parsing_error<T: ToString>(section: &str, field: &str, error: T) -> Self {
         SagError::ParsingError(ParsingError::new(section, field, error))
     }
     pub fn missing_field(section: &str, field: &str) -> Self {
@@ -49,25 +49,25 @@ impl SagError {
 }
 
 impl ParsingError {
-    fn new<T: ToString>(section: &str, field: Option<&str>, error: T) -> Self {
+    fn new<T: ToString>(section: &str, field: &str, error: T) -> Self {
         ParsingError {
             error: ParsingErrorKind::Error(error.to_string()),
             section: section.to_string(),
-            field: field.map(|s| s.to_string()),
+            field: field.to_string(),
         }
     }
     fn missing_field(section: &str, field: &str) -> Self {
         ParsingError {
             error: ParsingErrorKind::MissingField(field.to_string()),
             section: section.to_string(),
-            field: Some(field.to_string()),
+            field: field.to_string(),
         }
     }
     fn missing_section(section: &str) -> Self {
         ParsingError {
             error: ParsingErrorKind::MissingSection(section.to_string()),
             section: section.to_string(),
-            field: None,
+            field: "".to_string(),
         }
     }
 }
@@ -110,10 +110,9 @@ impl core::fmt::Display for ParsingError {
             ParsingErrorKind::MissingSection(section) => {
                 write!(f, "Missing section '{}'", section)
             }
-            ParsingErrorKind::Error(error) => match &self.field {
-                Some(field) => write!(f, "{}.{}: {}", self.section, field, error),
-                None => write!(f, "{}: {}", self.section, error),
-            },
+            ParsingErrorKind::Error(error) => {
+                write!(f, "{}.{}: {}", self.section, self.field, error)
+            }
         }
     }
 }
@@ -139,10 +138,9 @@ impl Debug for ParsingError {
             ParsingErrorKind::MissingSection(section) => {
                 write!(f, "Missing section {}", section)
             }
-            ParsingErrorKind::Error(error) => match &self.field {
-                Some(field) => write!(f, "{}.{}: {}", self.section, field, error),
-                None => write!(f, "{}: {}", self.section, error),
-            },
+            ParsingErrorKind::Error(error) => {
+                write!(f, "{}.{}: {}", self.section, self.field, error)
+            }
         }
     }
 }
