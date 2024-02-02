@@ -135,6 +135,13 @@ pub struct GeoMap<'a> {
     pub area: Option<&'a str>,
 }
 
+pub struct GrafanaMap<'a> {
+    pub label: &'a str,
+    pub r#type: &'a str,
+    pub source: &'a str,
+    pub data: Vec<&'a str>,
+}
+
 #[derive(Debug)]
 pub struct PieChart<'a> {
     pub label: &'a str,
@@ -430,6 +437,10 @@ impl<'a> GeoMap<'a> {
     }
 }
 
+impl <'a> GrafanaMap<'a> {
+    todo!();
+}
+
 impl<'a> PieChart<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
         let block = blocks
@@ -622,6 +633,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::PieChart(pie) => pie.source,
             PanelTypeUnion::BarChart(bar) => bar.source,
             PanelTypeUnion::TimeSeries(ts) => ts.source,
+            PanelTypeUnion::GrafanaMap(gm:) => gm.source,
         }
     }
 
@@ -638,6 +650,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
     fn get_traces(&self) -> &Vec<&str> {
         match self {
             PanelTypeUnion::GeoMap(map) => &map.data,
+            PanelTypeUnion::GrafanaMap(gm:) => &gm.data,
             PanelTypeUnion::XYChart(xy) => &xy.traces,
             PanelTypeUnion::PieChart(pie) => &pie.traces,
             PanelTypeUnion::BarChart(bar) => &bar.traces,
@@ -753,6 +766,7 @@ impl FromStr for PanelType {
             "bar_chart" => Ok(PanelType::BarChart),
             "geomap" => Ok(PanelType::GeoMap),
             "xy_chart" => Ok(PanelType::XYChart),
+            "grafana_map" => Ok(PanelType::GrafanaMap),
             _ => Err(format!("invalid panel type: {}", input)),
         }
     }
@@ -856,6 +870,7 @@ impl ToString for PanelTypeUnion<'_> {
             PanelTypeUnion::BarChart(_) => String::from("bar_chart"),
             PanelTypeUnion::GeoMap(_) => String::from("geomap"),
             PanelTypeUnion::XYChart(_) => String::from("xy_chart"),
+            PanelTypeUnion::GrafanaMap(_) => String::from("grafana_map"),
         }
     }
 }
@@ -868,6 +883,7 @@ impl ToString for PanelType {
             PanelType::BarChart => String::from("bar_chart"),
             PanelType::GeoMap => String::from("geomap"),
             PanelType::XYChart => String::from("xy_chart"),
+            PanelType::GrafanaMap => String::from("grafana_map"),
         }
     }
 }
@@ -960,6 +976,7 @@ impl<'a> From<PanelTypeUnion<'a>> for &'a str {
             PanelTypeUnion::BarChart(_) => "bar_chart",
             PanelTypeUnion::GeoMap(_) => "geomap",
             PanelTypeUnion::XYChart(_) => "xy_chart",
+            PanelTypeUnion::GrafanaMap(_) => "grafana_map",
         }
     }
 }
@@ -972,6 +989,7 @@ impl<'a> From<PanelType> for &'a str {
             PanelType::BarChart => "bar_chart",
             PanelType::GeoMap => "geomap",
             PanelType::XYChart => "xy_chart",
+            PanelType::GrafanaMap => "grafana_map",
         }
     }
 }
