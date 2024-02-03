@@ -1,6 +1,6 @@
 use crate::sections::{
     Application, BarChart, Config, Datasource, Deployment, Environment, GeoMap, PanelTypeUnion,
-    PieChart, Service, TimeSeries, Version, XYChart,
+    PieChart, Service, TimeSeries, Version, XYChart, GrafanaMap,
 };
 
 use serde::Serialize;
@@ -46,6 +46,14 @@ struct GrafanaData {
 #[derive(Debug, Serialize)]
 struct GrafanaGeoMap {
     #[serde(rename = "type")]
+    chart_type: String,
+    source: String,
+    data: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct GrafanaGMap {
+    #[serde(rename="type")]
     chart_type: String,
     source: String,
     data: Vec<String>,
@@ -98,6 +106,8 @@ enum GrafanaPanel {
     GeoMap(GrafanaGeoMap),
     #[serde(rename = "xy_chart")]
     XYChart(GrafanaXYChart),
+    #[serde(rename = "grafana-map")]
+    GrafanaMap(GrafanaGMap),
 }
 
 #[derive(Debug, Serialize)]
@@ -156,6 +166,16 @@ impl<'a> From<Datasource<'a>> for GrafanaDatasource {
 impl<'a> From<GeoMap<'a>> for GrafanaGeoMap {
     fn from(value: GeoMap<'a>) -> Self {
         GrafanaGeoMap {
+            chart_type: value.r#type.to_string(),
+            source: value.source.to_string(),
+            data: value.data.iter().map(|f| f.to_string()).collect(),
+        }
+    }
+}
+// might need a change of the name
+impl <'a> From<GrafanaMap<'a>> for GrafanaGMap {
+    fn from(value: GrafanaMap<'a>) -> Self {
+        GrafanaGMap {
             chart_type: value.r#type.to_string(),
             source: value.source.to_string(),
             data: value.data.iter().map(|f| f.to_string()).collect(),
@@ -225,7 +245,9 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                             GrafanaPanel::BarChart(bar_chart.into())
                         }
                         PanelTypeUnion::GeoMap(geo_map) => GrafanaPanel::GeoMap(geo_map.into()),
+                        PanelTypeUnion::GrafanaMap(g_map) => GrafanaPanel::GrafanaMap(g_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => GrafanaPanel::XYChart(xy_chart.into()),
+
                     };
                     (name.to_string(), grafana_panel)
                 })
