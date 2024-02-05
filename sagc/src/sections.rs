@@ -135,7 +135,7 @@ pub struct GeoMap<'a> {
 #[derive(Debug)]
 pub struct GrafanaMap<'a> {
     pub label: &'a str,
-    pub r#type: &'a str,
+    pub r#type: PanelType,
     pub source: &'a str,
     pub data: Vec<&'a str>,
     pub area: Option<&'a str>,
@@ -422,10 +422,13 @@ impl <'a> GrafanaMap<'a> {
             .get(block_name)
             .ok_or(SagError::missing_section(block_name))?;
 
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
+        match block {
+            Value::Block(_) => (),
+            _ => {
+                return Err(SagError::error(format!(
+                    "{block_name} section is not a block"
+                )))
+            }
         }
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -436,7 +439,7 @@ impl <'a> GrafanaMap<'a> {
         Ok(GrafanaMap {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::parsing_error(block_name, "type", e))?,
             source,
             data,
             area,

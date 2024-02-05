@@ -147,6 +147,7 @@ fn get_traces_with_data_source_name(
             PanelTypeUnion::TimeSeries(time_series) => time_series.source == data_source_name,
             PanelTypeUnion::BarChart(bar_chart) => bar_chart.source == data_source_name,
             PanelTypeUnion::GeoMap(geo_map) => geo_map.source == data_source_name,
+            PanelTypeUnion::GrafanaMap(grafana_map) => grafana_map.source == data_source_name,
             PanelTypeUnion::XYChart(xy_chart) => xy_chart.source == data_source_name,
         })
         .flat_map(|trace| match trace {
