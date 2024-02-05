@@ -47,12 +47,6 @@ impl<'a> TryInto<Vec<&'a str>> for &Value<'a> {
     }
 }
 
-impl<'a> Value<'a> {
-    pub fn is_block(&self) -> bool {
-        matches!(self, Value::Block(_))
-    }
-}
-
 fn parse_name(input: &str) -> IResult<&str> {
     let (input, result) = recognize(many1_count(alt((alpha1, tag("_")))))(input)?;
     Ok((input, result))
