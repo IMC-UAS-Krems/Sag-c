@@ -7,7 +7,6 @@ use std::str::FromStr;
 use url::Url;
 
 use crate::errors::SagError;
-use crate::grafana::Grafana;
 use crate::parse;
 use crate::parser::Blocks;
 use crate::parser::Value;

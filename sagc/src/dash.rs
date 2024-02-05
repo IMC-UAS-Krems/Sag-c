@@ -1,6 +1,5 @@
 use crate::sections::{
-    Application, BarChart, Config, Deployment, Environment, GeoMap, PanelTypeUnion, PieChart,
-    Service, TimeSeries, Version, XYChart,
+    Application, BarChart, Config, Deployment, Environment, GeoMap, GrafanaMap, PanelTypeUnion, PieChart, Service, TimeSeries, Version, XYChart
 };
 
 use serde::Serialize;
@@ -42,6 +41,14 @@ struct DashData {
 
 #[derive(Debug, Serialize)]
 struct DashGeoMap {
+    #[serde(rename = "type")]
+    chart_type: String,
+    source: String,
+    data: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct DashGrafanaMap {
     #[serde(rename = "type")]
     chart_type: String,
     source: String,
@@ -93,6 +100,8 @@ enum DashPanel {
     BarChart(DashBarChart),
     #[serde(rename = "geomap")]
     GeoMap(DashGeoMap),
+    #[serde(rename = "grafana-map")]
+    GrafanaMap(DashGrafanaMap),
     #[serde(rename = "xy_chart")]
     XYChart(DashXYChart),
 }
@@ -146,6 +155,7 @@ fn get_traces_with_data_source_name(
             PanelTypeUnion::BarChart(bar_chart) => bar_chart.traces.iter(),
             PanelTypeUnion::GeoMap(geo_map) => geo_map.data.iter(),
             PanelTypeUnion::XYChart(xy_chart) => xy_chart.traces.iter(),
+            PanelTypeUnion::GrafanaMap(grafana_map) => grafana_map.data.iter(),
         })
         .map(|f| f.to_string())
         .collect()
@@ -208,6 +218,16 @@ impl From<Version> for DashVersion {
 impl From<GeoMap<'_>> for DashGeoMap {
     fn from(value: GeoMap<'_>) -> Self {
         DashGeoMap {
+            chart_type: value.r#type.to_string(),
+            source: value.source.to_string(),
+            data: value.data.iter().map(|f| f.to_string()).collect(),
+        }
+    }
+}
+
+impl From<GrafanaMap<'_>> for DashGrafanaMap {
+    fn from(value: GrafanaMap<'_>) -> Self {
+        DashGrafanaMap {
             chart_type: value.r#type.to_string(),
             source: value.source.to_string(),
             data: value.data.iter().map(|f| f.to_string()).collect(),
@@ -278,6 +298,7 @@ impl From<Application<'_>> for DashApplication {
                         }
                         PanelTypeUnion::GeoMap(geo_map) => DashPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => DashPanel::XYChart(xy_chart.into()),
+                        PanelTypeUnion::GrafanaMap(geo_map) => DashPanel::GrafanaMap(geo_map.into()),
                     };
                     (name.to_string(), grafana_panel)
                 })
