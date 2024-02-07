@@ -139,6 +139,7 @@ fn get_traces_with_data_source_name(
             PanelTypeUnion::BarChart(bar_chart) => bar_chart.source == data_source_name,
             PanelTypeUnion::GeoMap(geo_map) => geo_map.source == data_source_name,
             PanelTypeUnion::XYChart(xy_chart) => xy_chart.source == data_source_name,
+            PanelTypeUnion::GrafanaMap(_) => todo!(),
         })
         .flat_map(|trace| match trace {
             PanelTypeUnion::PieChart(pie_chart) => pie_chart.traces.iter(),
@@ -146,6 +147,7 @@ fn get_traces_with_data_source_name(
             PanelTypeUnion::BarChart(bar_chart) => bar_chart.traces.iter(),
             PanelTypeUnion::GeoMap(geo_map) => geo_map.data.iter(),
             PanelTypeUnion::XYChart(xy_chart) => xy_chart.traces.iter(),
+            PanelTypeUnion::GrafanaMap(_) => todo!(),
         })
         .map(|f| f.to_string())
         .collect()
@@ -278,6 +280,7 @@ impl From<Application<'_>> for DashApplication {
                         }
                         PanelTypeUnion::GeoMap(geo_map) => DashPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => DashPanel::XYChart(xy_chart.into()),
+                        PanelTypeUnion::GrafanaMap(_) => todo!(),
                     };
                     (name.to_string(), grafana_panel)
                 })

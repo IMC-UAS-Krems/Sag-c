@@ -226,6 +226,7 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         }
                         PanelTypeUnion::GeoMap(geo_map) => GrafanaPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => GrafanaPanel::XYChart(xy_chart.into()),
+                        PanelTypeUnion::GrafanaMap(_) => todo!(),
                     };
                     (name.to_string(), grafana_panel)
                 })
