@@ -95,6 +95,7 @@ enum DashPanel {
     GeoMap(DashGeoMap),
     #[serde(rename = "xy_chart")]
     XYChart(DashXYChart),
+    NotSupported,
 }
 
 #[derive(Debug, Serialize)]
@@ -280,7 +281,7 @@ impl From<Application<'_>> for DashApplication {
                         }
                         PanelTypeUnion::GeoMap(geo_map) => DashPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => DashPanel::XYChart(xy_chart.into()),
-                        PanelTypeUnion::GrafanaMap(_) => todo!(),
+                        PanelTypeUnion::GrafanaMap(_) => DashPanel::NotSupported,
                     };
                     (name.to_string(), grafana_panel)
                 })

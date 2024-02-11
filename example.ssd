@@ -19,7 +19,7 @@ application:
     type is Web
     layout is SinglePage
     roles -> User, SuperUser, Admin
-    panels -> Map, Pie, XY, TS, Bar
+    panels -> Map, Pie, XY, TS, Bar, PluginGMap
 
 Map:
     label is map
@@ -51,6 +51,12 @@ Bar:
     type is bar_chart
     source is first
     traces -> dateObserved, NOx, O3, NO2, SO2
+
+PluginGMap:
+    label is grafana_map
+    type is grafana-map
+    source is first
+    data -> location, stationName, O3, NO2, SO2, address
 
 deployment:
     environments -> local

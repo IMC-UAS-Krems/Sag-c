@@ -98,6 +98,7 @@ enum GrafanaPanel {
     GeoMap(GrafanaGeoMap),
     #[serde(rename = "xy_chart")]
     XYChart(GrafanaXYChart),
+    NotSupported,
 }
 
 #[derive(Debug, Serialize)]
@@ -226,7 +227,7 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         }
                         PanelTypeUnion::GeoMap(geo_map) => GrafanaPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => GrafanaPanel::XYChart(xy_chart.into()),
-                        PanelTypeUnion::GrafanaMap(_) => todo!(),
+                        PanelTypeUnion::GrafanaMap(_) => GrafanaPanel::NotSupported,
                     };
                     (name.to_string(), grafana_panel)
                 })
