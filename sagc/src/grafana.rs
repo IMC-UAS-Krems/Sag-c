@@ -1,6 +1,6 @@
 use crate::sections::{
     Application, BarChart, Config, Datasource, Deployment, Environment, GeoMap, PanelTypeUnion,
-    PieChart, Service, TimeSeries, Version, XYChart,
+    PieChart, Service, TimeSeries, Version, XYChart, GrafanaMap,
 };
 
 use serde::Serialize;
@@ -98,7 +98,6 @@ enum GrafanaPanel {
     GeoMap(GrafanaGeoMap),
     #[serde(rename = "xy_chart")]
     XYChart(GrafanaXYChart),
-    #[serde(rename = "NotSupported")]
     NotSupported,
 }
 
