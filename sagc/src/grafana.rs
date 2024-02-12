@@ -1,6 +1,6 @@
 use crate::sections::{
     Application, BarChart, Config, Datasource, Deployment, Environment, GeoMap, PanelTypeUnion,
-    PieChart, Service, TimeSeries, Version, XYChart, GrafanaMap,
+    PieChart, Service, TimeSeries, Version, XYChart,
 };
 
 use serde::Serialize;
@@ -83,6 +83,14 @@ struct GrafanaXYChart {
     chart_type: String,
     source: String,
     traces: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct GrafanaPluginMap {
+    #[serde(rename="type")]
+    chart_type: String,
+    //source: String,
+    //data: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
