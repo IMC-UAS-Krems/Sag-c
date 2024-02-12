@@ -98,6 +98,7 @@ enum GrafanaPanel {
     GeoMap(GrafanaGeoMap),
     #[serde(rename = "xy_chart")]
     XYChart(GrafanaXYChart),
+    #[serde(rename = "NotSupported")]
     NotSupported,
 }
 
@@ -230,6 +231,10 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         PanelTypeUnion::GrafanaMap(_) => GrafanaPanel::NotSupported,
                     };
                     (name.to_string(), grafana_panel)
+                })
+                .filter(|(_, panel)| match panel {
+                    GrafanaPanel::NotSupported => false,
+                    _ => true,
                 })
                 .collect(),
         }
