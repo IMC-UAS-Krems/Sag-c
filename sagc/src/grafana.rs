@@ -86,6 +86,14 @@ struct GrafanaXYChart {
 }
 
 #[derive(Debug, Serialize)]
+struct GrafanaPluginMap {
+    #[serde(rename="type")]
+    chart_type: String,
+    //source: String,
+    //data: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 enum GrafanaPanel {
     #[serde(rename = "pie_chart")]
@@ -98,6 +106,7 @@ enum GrafanaPanel {
     GeoMap(GrafanaGeoMap),
     #[serde(rename = "xy_chart")]
     XYChart(GrafanaXYChart),
+    NotSupported,
 }
 
 #[derive(Debug, Serialize)]
@@ -226,8 +235,13 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         }
                         PanelTypeUnion::GeoMap(geo_map) => GrafanaPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => GrafanaPanel::XYChart(xy_chart.into()),
+                        PanelTypeUnion::GrafanaMap(_) => GrafanaPanel::NotSupported,
                     };
                     (name.to_string(), grafana_panel)
+                })
+                .filter(|(_, panel)| match panel {
+                    GrafanaPanel::NotSupported => false,
+                    _ => true,
                 })
                 .collect(),
         }
