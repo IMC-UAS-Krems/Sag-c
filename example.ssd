@@ -19,7 +19,7 @@ application:
     type is Web
     layout is SinglePage
     roles -> User, SuperUser, Admin
-    panels -> Map, Pie, XY, TS, PluginGMap, Bar
+    panels -> Map, Pie, XY, TS, PluginGMap, Bar, ExtValues, MultiLine, SingleLine
 
 Map:
     label is map
@@ -57,6 +57,24 @@ Bar:
     type is bar_chart
     source is first
     traces -> dateObserved, NOx, O3, NO2, SO2
+
+ExtValues:
+    label is extreme_values
+    type is extreme-ExtValues
+    source is first
+    data -> dateObserved, NOx, O3, NO2, SO2
+
+MultiLine:
+    label is multiline
+    type is multiline
+    source is first
+    data -> dateObserved, NOx, O3, NO2, SO2
+
+SingleLine:
+    label is singleline
+    type is singleline
+    source is first
+    data -> dateTime, value
 
 deployment:
     environments -> local
