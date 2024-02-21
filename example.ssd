@@ -62,13 +62,13 @@ ExtValues:
     label is extreme_values
     type is extreme-ExtValues
     source is first
-    data -> dateObserved, NOx, O3, NO2, SO2
+    traces -> dateObserved, NOx, O3, NO2, SO2
 
 MultiLine:
     label is multiline
     type is multiline
     source is first
-    data -> dateObserved, NOx, O3, NO2, SO2
+    traces -> dateObserved, NOx, O3, NO2, SO2
 
 SingleLine:
     label is singleline
