@@ -70,7 +70,7 @@ MultiLine:
 ExtremeValues:
     type is smartcomm-extreme-values-panel
     source is first
-    traces ->
+    traces -> dateObserved, NOx, O3, NO2, SO2
 
 Calendar:
     type is smartcomm-calendar-panel
