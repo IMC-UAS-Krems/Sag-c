@@ -1,0 +1,56 @@
+service:
+    title is Grafana dashboard
+    version is 1.0.0
+    scope is Environment
+    test:
+        one is one
+        two is two
+
+data:
+    sources -> first
+
+first:
+    type is SmartMeter
+    provider is Fiware
+    uri is https://data.iiss.at/dataskop/fiwarenosec/v2/entities
+    query is AirQualityObserved
+
+application:
+    type is Grafana
+    layout is SinglePage
+    roles -> User, SuperUser, Admin
+    panels -> SCMapPanel, SingleLine, MultiLine, ExtremeValues, Calendar
+
+SCMapPanel:
+    type is smartcomm-map-panel
+    source is first
+    traces -> location, stationName, O3, NO2, SO2, address
+
+SingleLine:
+    type is smartcomm-simpleline-panel
+    source is first
+    traces -> dateObserved, NOx
+
+MultiLine:
+    type is smartcomm-multiplelinechart-panel
+    source is first
+    traces -> dateObserved, NOx, O3, NO2
+
+ExtremeValues:
+    type is smartcomm-extreme-values-panel
+    source is first
+    traces -> dateObserved, NOx, O3, NO2, SO2
+
+Calendar:
+    type is smartcomm-calendar-panel
+    source is first
+    locations -> todo
+    traces -> dateObserved, CO, NO, NOx, O3
+
+deployment:
+    environments -> local
+
+local:
+    uri is https://localhost.org:3000/test
+    port is 50055
+    type is Docker
