@@ -19,7 +19,7 @@ application:
     type is Web
     layout is SinglePage
     roles -> User, SuperUser, Admin
-    panels -> Map, Pie, XY, TS, PluginGMap, Bar, ExtValues, MultiLine, SingleLine
+    panels -> Map, Pie, XY, TS, Bar, SCMapPanel, SingleLine, MultiLine, ExtremeValues, Calendar
 
 Map:
     label is map
@@ -46,35 +46,37 @@ TS:
     source is first
     traces -> dateObserved, NOx, O3, NO2, SO2
 
-PluginGMap:
-    label is grafana_map
-    type is grafana-map
-    source is first
-    data -> location, stationName, O3, NO2, SO2, address
-
 Bar:
     label is bar
     type is bar_chart
     source is first
     traces -> dateObserved, NOx, O3, NO2, SO2
 
-ExtValues:
-    label is extreme_values
-    type is extreme-ExtValues
+SCMapPanel:
+    type is smartcomm-map-panel
     source is first
-    traces -> dateObserved, NOx, O3, NO2, SO2
-
-MultiLine:
-    label is multiline
-    type is multiline
-    source is first
-    traces -> dateObserved, NOx, O3, NO2, SO2
+    traces -> location, stationName, O3, NO2, SO2, address
 
 SingleLine:
-    label is singleline
-    type is singleline
+    type is smartcomm-simpleline-panel
     source is first
-    data -> dateTime, value
+    traces -> dateObserved, NOx
+
+MultiLine:
+    type is smartcomm-multiplelinechart-panel
+    source is first
+    traces -> dateObserved, NOx, O3, NO2
+
+ExtremeValues:
+    type is smartcomm-extreme-values-panel
+    source is first
+    traces ->
+
+Calendar:
+    type is smartcomm-calendar-panel
+    source is first
+    locations -> todo
+    traces -> dateObserved, CO, NO, NOx, O3
 
 deployment:
     environments -> local
