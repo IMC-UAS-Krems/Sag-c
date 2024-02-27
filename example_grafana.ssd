@@ -34,12 +34,14 @@ SingleLine:
 MultiLine:
     type is smartcomm-multiplelinechart-panel
     source is first
+    locations -> todo
     traces -> dateObserved, NOx, O3, NO2
 
 ExtremeValues:
     type is smartcomm-extreme-values-panel
     source is first
-    traces -> dateObserved, NOx, O3, NO2, SO2
+    locations -> todo
+    traces -> NOx, O3, NO2, SO2
 
 Calendar:
     type is smartcomm-calendar-panel
