@@ -34,19 +34,19 @@ SingleLine:
 MultiLine:
     type is smartcomm-multiplelinechart-panel
     source is first
-    locations -> todo
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
     traces -> dateObserved, NOx, O3, NO2
 
 ExtremeValues:
     type is smartcomm-extreme-values-panel
     source is first
-    locations -> todo
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
     traces -> NOx, O3, NO2, SO2
 
 Calendar:
     type is smartcomm-calendar-panel
     source is first
-    locations -> todo
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
     traces -> dateObserved, CO, NO, NOx, O3
 
 deployment:
