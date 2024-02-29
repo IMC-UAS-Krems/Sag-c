@@ -710,7 +710,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::BarChart(bar) => Some(bar.label),
             PanelTypeUnion::TimeSeries(ts) => Some(ts.label),
             PanelTypeUnion::GrafanaMap(gm) => Some(gm.label),
-            PanelTypeUnion::GrafanaSingleLine(gsl) => None,
+            PanelTypeUnion::GrafanaSingleLine(_) => None,
         }
     }
 
@@ -834,7 +834,7 @@ impl FromStr for PanelType {
             "bar_chart" => Ok(PanelType::BarChart),
             "geomap" => Ok(PanelType::GeoMap),
             "xy_chart" => Ok(PanelType::XYChart),
-            "grafana-map" => Ok(PanelType::GrafanaMap),
+            "smartcomm-map-panel" => Ok(PanelType::GrafanaMap),
             "smartcomm-simpleline-panel" => Ok(PanelType::GrafanaSingleLine),
             _ => Err(format!("invalid panel type: {}", input)),
         }
@@ -939,7 +939,7 @@ impl ToString for PanelTypeUnion<'_> {
             PanelTypeUnion::BarChart(_) => String::from("bar_chart"),
             PanelTypeUnion::GeoMap(_) => String::from("geomap"),
             PanelTypeUnion::XYChart(_) => String::from("xy_chart"),
-            PanelTypeUnion::GrafanaMap(_) => String::from("grafana-map"),
+            PanelTypeUnion::GrafanaMap(_) => String::from("smartcomm-map-panel"),
             PanelTypeUnion::GrafanaSingleLine(_) => String::from("smartcomm-simpleline-panel"),
         }
     }
@@ -953,7 +953,7 @@ impl ToString for PanelType {
             PanelType::BarChart => String::from("bar_chart"),
             PanelType::GeoMap => String::from("geomap"),
             PanelType::XYChart => String::from("xy_chart"),
-            PanelType::GrafanaMap => String::from("grafana-map"),
+            PanelType::GrafanaMap => String::from("smartcomm-map-panel"),
             PanelType::GrafanaSingleLine => String::from("smartcomm-simpleline-panel"),
         }
     }
@@ -1047,7 +1047,7 @@ impl<'a> From<PanelTypeUnion<'a>> for &'a str {
             PanelTypeUnion::BarChart(_) => "bar_chart",
             PanelTypeUnion::GeoMap(_) => "geomap",
             PanelTypeUnion::XYChart(_) => "xy_chart",
-            PanelTypeUnion::GrafanaMap(_) => "grafana-map",
+            PanelTypeUnion::GrafanaMap(_) => "smartcomm-map-panel",
             PanelTypeUnion::GrafanaSingleLine(_) => "smartcomm-simpleline-panel",
         }
     }
@@ -1061,7 +1061,7 @@ impl<'a> From<PanelType> for &'a str {
             PanelType::BarChart => "bar_chart",
             PanelType::GeoMap => "geomap",
             PanelType::XYChart => "xy_chart",
-            PanelType::GrafanaMap => "grafana-map",
+            PanelType::GrafanaMap => "smartcomm-map-panel",
             PanelType::GrafanaSingleLine => "smartcomm-simpleline-panel",
         }
     }
