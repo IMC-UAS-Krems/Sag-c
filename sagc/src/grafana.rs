@@ -237,6 +237,8 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         PanelTypeUnion::XYChart(xy_chart) => GrafanaPanel::XYChart(xy_chart.into()),
                         PanelTypeUnion::GrafanaMap(_) => GrafanaPanel::NotSupported,
                         PanelTypeUnion::GrafanaSingleLine(_) => GrafanaPanel::NotSupported,
+                        PanelTypeUnion::GrafanaMultiLine(_) => GrafanaPanel::NotSupported,
+                        PanelTypeUnion::GrafanaExtValues(_) => GrafanaPanel::NotSupported,
                     };
                     (name.to_string(), grafana_panel)
                 })

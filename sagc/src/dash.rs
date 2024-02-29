@@ -142,6 +142,8 @@ fn get_traces_with_data_source_name(
             PanelTypeUnion::XYChart(xy_chart) => xy_chart.source == data_source_name,
             PanelTypeUnion::GrafanaMap(_) => todo!(),
             PanelTypeUnion::GrafanaSingleLine(_) => todo!(),
+            PanelTypeUnion::GrafanaMultiLine(_) => todo!(),
+            PanelTypeUnion::GrafanaExtValues(_) => todo!(),
         })
         .flat_map(|trace| match trace {
             PanelTypeUnion::PieChart(pie_chart) => pie_chart.traces.iter(),
@@ -151,6 +153,8 @@ fn get_traces_with_data_source_name(
             PanelTypeUnion::XYChart(xy_chart) => xy_chart.traces.iter(),
             PanelTypeUnion::GrafanaMap(_) => todo!(),
             PanelTypeUnion::GrafanaSingleLine(_) => todo!(),
+            PanelTypeUnion::GrafanaMultiLine(_) => todo!(),
+            PanelTypeUnion::GrafanaExtValues(_) => todo!(),
         })
         .map(|f| f.to_string())
         .collect()
@@ -285,6 +289,8 @@ impl From<Application<'_>> for DashApplication {
                         PanelTypeUnion::XYChart(xy_chart) => DashPanel::XYChart(xy_chart.into()),
                         PanelTypeUnion::GrafanaMap(_) => DashPanel::NotSupported,
                         PanelTypeUnion::GrafanaSingleLine(_) => DashPanel::NotSupported,
+                        PanelTypeUnion::GrafanaMultiLine(_) => DashPanel::NotSupported,
+                        PanelTypeUnion::GrafanaExtValues(_) => DashPanel::NotSupported,
                     };
                     (name.to_string(), grafana_panel)
                 })
