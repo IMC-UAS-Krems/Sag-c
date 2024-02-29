@@ -115,7 +115,8 @@ pub enum PanelTypeUnion<'a> {
     BarChart(BarChart<'a>),
     GeoMap(GeoMap<'a>),
     XYChart(XYChart<'a>),
-    GrafanaMap(GrafanaMap<'a>,)
+    GrafanaMap(GrafanaMap<'a>,),
+    GrafanaSingleLine(GrafanaSingleLine<'a>,)
 }
 
 #[derive(Debug)]
@@ -126,6 +127,7 @@ pub enum PanelType {
     GeoMap,
     XYChart,
     GrafanaMap,
+    GrafanaSingleLine,
 }
 
 #[derive(Debug)]
@@ -153,6 +155,13 @@ pub struct PieChart<'a> {
     pub source: &'a str,
     pub traces: Vec<&'a str>,
     pub pie_chart_type: Option<PieChartType>,
+}
+
+#[derive(Debug)]
+pub struct GrafanaSingleLine<'a> {
+    pub r#type: PanelType,
+    pub source: &'a str,
+    pub traces: Vec<&'a str>,
 }
 
 #[derive(Debug)]
@@ -397,6 +406,7 @@ impl<'a> Application<'a> {
                 PanelType::GeoMap => PanelTypeUnion::GeoMap(GeoMap::new(blocks, panel_name)?),
                 PanelType::XYChart => PanelTypeUnion::XYChart(XYChart::new(blocks, panel_name)?),
                 PanelType::GrafanaMap => PanelTypeUnion::GrafanaMap(GrafanaMap::new(blocks,panel_name)?),
+                PanelType::GrafanaSingleLine => PanelTypeUnion::GrafanaSingleLine(GrafanaSingleLine::new(blocks, panel_name)?),
             };
 
             panels_map.insert(panel_name, panel_type_union);
@@ -589,6 +599,30 @@ impl<'a> XYChart<'a> {
     }
 }
 
+impl <'a> GrafanaSingleLine<'a> {
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
+        let block = blocks
+            .get(block_name)
+            .ok_or(SagError::missing_section(block_name))?;
+
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{block_name} section is not a block"
+            )));
+        }
+        let r#type = parse!(block, &str, block_name, "type");
+        let source = parse!(block, &str, block_name, "source");
+        let traces = parse!(block, Vec<&str>, block_name, "traces");
+
+        Ok(GrafanaSingleLine{
+            r#type: PanelType::from_str(r#type)
+                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+            source,
+            traces,
+        })
+    }
+}
+
 impl<'a> Deployment<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
         const SECTION_NAME: &str = "deployment";
@@ -651,7 +685,7 @@ impl<'a> Environment<'a> {
 
 trait Panel {
     fn get_source(&self) -> &str;
-    fn get_label(&self) -> &str;
+    fn get_label(&self) -> Option<&str>;
     fn get_traces(&self) -> &Vec<&str>;
 }
 
@@ -664,17 +698,19 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::BarChart(bar) => bar.source,
             PanelTypeUnion::TimeSeries(ts) => ts.source,
             PanelTypeUnion::GrafanaMap(gm) => gm.source,
+            PanelTypeUnion::GrafanaSingleLine(gsl) => gsl.source,
         }
     }
 
-    fn get_label(&self) -> &str {
+    fn get_label(&self) -> Option<&str> {
         match self {
-            PanelTypeUnion::GeoMap(map) => map.label,
-            PanelTypeUnion::XYChart(xy) => xy.label,
-            PanelTypeUnion::PieChart(pie) => pie.label,
-            PanelTypeUnion::BarChart(bar) => bar.label,
-            PanelTypeUnion::TimeSeries(ts) => ts.label,
-            PanelTypeUnion::GrafanaMap(gm) => gm.label,
+            PanelTypeUnion::GeoMap(map) => Some(map.label),
+            PanelTypeUnion::XYChart(xy) => Some(xy.label),
+            PanelTypeUnion::PieChart(pie) => Some(pie.label),
+            PanelTypeUnion::BarChart(bar) => Some(bar.label),
+            PanelTypeUnion::TimeSeries(ts) => Some(ts.label),
+            PanelTypeUnion::GrafanaMap(gm) => Some(gm.label),
+            PanelTypeUnion::GrafanaSingleLine(gsl) => None,
         }
     }
 
@@ -686,6 +722,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::BarChart(bar) => &bar.traces,
             PanelTypeUnion::TimeSeries(ts) => &ts.traces,
             PanelTypeUnion::GrafanaMap(gm) => &gm.data,
+            PanelTypeUnion::GrafanaSingleLine(gsl) => &gsl.traces,
         }
     }
 }
@@ -798,6 +835,7 @@ impl FromStr for PanelType {
             "geomap" => Ok(PanelType::GeoMap),
             "xy_chart" => Ok(PanelType::XYChart),
             "grafana-map" => Ok(PanelType::GrafanaMap),
+            "smartcomm-simpleline-panel" => Ok(PanelType::GrafanaSingleLine),
             _ => Err(format!("invalid panel type: {}", input)),
         }
     }
@@ -902,6 +940,7 @@ impl ToString for PanelTypeUnion<'_> {
             PanelTypeUnion::GeoMap(_) => String::from("geomap"),
             PanelTypeUnion::XYChart(_) => String::from("xy_chart"),
             PanelTypeUnion::GrafanaMap(_) => String::from("grafana-map"),
+            PanelTypeUnion::GrafanaSingleLine(_) => String::from("smartcomm-simpleline-panel"),
         }
     }
 }
@@ -915,6 +954,7 @@ impl ToString for PanelType {
             PanelType::GeoMap => String::from("geomap"),
             PanelType::XYChart => String::from("xy_chart"),
             PanelType::GrafanaMap => String::from("grafana-map"),
+            PanelType::GrafanaSingleLine => String::from("smartcomm-simpleline-panel"),
         }
     }
 }
@@ -1008,6 +1048,7 @@ impl<'a> From<PanelTypeUnion<'a>> for &'a str {
             PanelTypeUnion::GeoMap(_) => "geomap",
             PanelTypeUnion::XYChart(_) => "xy_chart",
             PanelTypeUnion::GrafanaMap(_) => "grafana-map",
+            PanelTypeUnion::GrafanaSingleLine(_) => "smartcomm-simpleline-panel",
         }
     }
 }
@@ -1021,6 +1062,7 @@ impl<'a> From<PanelType> for &'a str {
             PanelType::GeoMap => "geomap",
             PanelType::XYChart => "xy_chart",
             PanelType::GrafanaMap => "grafana-map",
+            PanelType::GrafanaSingleLine => "smartcomm-simpleline-panel",
         }
     }
 }
