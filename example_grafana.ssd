@@ -16,41 +16,10 @@ first:
     query is AirQualityObserved
 
 application:
-    type is Web
+    type is Grafana
     layout is SinglePage
     roles -> User, SuperUser, Admin
-    panels -> Map, Pie, XY, TS, Bar, SCMapPanel, SingleLine, MultiLine, ExtremeValues, Calendar
-
-Map:
-    label is map
-    type is geomap
-    source is first
-    data -> location, stationName, O3, NO2, SO2, address
-
-Pie:
-    label is pie
-    type is pie_chart
-    source is first
-    traces -> NOx, O3, NO2, SO2
-    pie_chart_type is pie
-
-XY:
-    label is xy
-    type is xy_chart
-    source is first
-    traces -> dateObserved, NOx, O3, NO2, SO2
-
-TS:
-    label is ts
-    type is timeseries
-    source is first
-    traces -> dateObserved, NOx, O3, NO2, SO2
-
-Bar:
-    label is bar
-    type is bar_chart
-    source is first
-    traces -> dateObserved, NOx, O3, NO2, SO2
+    panels -> SCMapPanel, SingleLine, MultiLine, ExtremeValues, Calendar
 
 SCMapPanel:
     type is smartcomm-map-panel
