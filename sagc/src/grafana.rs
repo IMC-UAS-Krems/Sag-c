@@ -239,6 +239,7 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         PanelTypeUnion::GrafanaSingleLine(_) => GrafanaPanel::NotSupported,
                         PanelTypeUnion::GrafanaMultiLine(_) => GrafanaPanel::NotSupported,
                         PanelTypeUnion::GrafanaExtValues(_) => GrafanaPanel::NotSupported,
+                        PanelTypeUnion::GrafanaCalendar(_) => GrafanaPanel::NotSupported,
                     };
                     (name.to_string(), grafana_panel)
                 })

@@ -144,6 +144,7 @@ fn get_traces_with_data_source_name(
             PanelTypeUnion::GrafanaSingleLine(_) => todo!(),
             PanelTypeUnion::GrafanaMultiLine(_) => todo!(),
             PanelTypeUnion::GrafanaExtValues(_) => todo!(),
+            PanelTypeUnion::GrafanaCalendar(_) => todo!(),
         })
         .flat_map(|trace| match trace {
             PanelTypeUnion::PieChart(pie_chart) => pie_chart.traces.iter(),
@@ -155,6 +156,7 @@ fn get_traces_with_data_source_name(
             PanelTypeUnion::GrafanaSingleLine(_) => todo!(),
             PanelTypeUnion::GrafanaMultiLine(_) => todo!(),
             PanelTypeUnion::GrafanaExtValues(_) => todo!(),
+            PanelTypeUnion::GrafanaCalendar(_) => todo!(),
         })
         .map(|f| f.to_string())
         .collect()
@@ -291,6 +293,7 @@ impl From<Application<'_>> for DashApplication {
                         PanelTypeUnion::GrafanaSingleLine(_) => DashPanel::NotSupported,
                         PanelTypeUnion::GrafanaMultiLine(_) => DashPanel::NotSupported,
                         PanelTypeUnion::GrafanaExtValues(_) => DashPanel::NotSupported,
+                        PanelTypeUnion::GrafanaCalendar(_) => DashPanel::NotSupported,
                     };
                     (name.to_string(), grafana_panel)
                 })

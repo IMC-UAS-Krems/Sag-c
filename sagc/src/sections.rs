@@ -119,6 +119,7 @@ pub enum PanelTypeUnion<'a> {
     GrafanaSingleLine(GrafanaSingleLine<'a>,),
     GrafanaMultiLine(GrafanaMultiLine<'a>),
     GrafanaExtValues(GrafanaExtValues<'a>),
+    GrafanaCalendar(GrafanaCalendar<'a>),
 }
 
 #[derive(Debug)]
@@ -132,6 +133,7 @@ pub enum PanelType {
     GrafanaSingleLine,
     GrafanaMultiLine,
     GrafanaExtValues,
+    GrafanaCalendar,
 }
 
 #[derive(Debug)]
@@ -178,6 +180,14 @@ pub struct GrafanaMultiLine<'a> {
 
 #[derive(Debug)]
 pub struct GrafanaExtValues<'a> {
+    pub r#type: PanelType,
+    pub source: &'a str,
+    pub locations: Vec<&'a str>,
+    pub traces: Vec<&'a str>,
+}
+
+#[derive(Debug)]
+pub struct GrafanaCalendar<'a> {
     pub r#type: PanelType,
     pub source: &'a str,
     pub locations: Vec<&'a str>,
@@ -429,6 +439,7 @@ impl<'a> Application<'a> {
                 PanelType::GrafanaSingleLine => PanelTypeUnion::GrafanaSingleLine(GrafanaSingleLine::new(blocks, panel_name)?),
                 PanelType::GrafanaMultiLine => PanelTypeUnion::GrafanaMultiLine(GrafanaMultiLine::new(blocks, panel_name)?),
                 PanelType::GrafanaExtValues => PanelTypeUnion::GrafanaExtValues(GrafanaExtValues::new(blocks, panel_name)?),
+                PanelType::GrafanaCalendar => PanelTypeUnion::GrafanaCalendar(GrafanaCalendar::new(blocks, panel_name)?),
             };
 
             panels_map.insert(panel_name, panel_type_union);
@@ -697,6 +708,33 @@ impl <'a> GrafanaExtValues<'a> {
     }
 }
 
+impl <'a> GrafanaCalendar<'a> {
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
+        let block = blocks
+            .get(block_name)
+            .ok_or(SagError::missing_section(block_name))?;
+
+        if !block.is_block() {
+            return Err(SagError::error(format!(
+                "{block_name} section is not a block"
+            )));
+        }
+        let r#type = parse!(block, &str, block_name, "type");
+        let source = parse!(block, &str, block_name, "source");
+        let locations = parse!(block, Vec<&str>, block_name, "locations");
+        let traces = parse!(block, Vec<&str>, block_name, "traces");
+
+        Ok(GrafanaCalendar{
+            r#type: PanelType::from_str(r#type)
+                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+            source,
+            locations,
+            traces,
+        })
+    }
+
+}
+
 impl<'a> Deployment<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
         const SECTION_NAME: &str = "deployment";
@@ -775,6 +813,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaSingleLine(gsl) => gsl.source,
             PanelTypeUnion::GrafanaMultiLine(gml) => gml.source,
             PanelTypeUnion::GrafanaExtValues(gextv) => gextv.source,
+            PanelTypeUnion::GrafanaCalendar(gc) => gc.source,
         }
     }
 
@@ -789,6 +828,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaSingleLine(_) => None,
             PanelTypeUnion::GrafanaMultiLine(_) => None,
             PanelTypeUnion::GrafanaExtValues(_) => None,
+            PanelTypeUnion::GrafanaCalendar(_) => None,
         }
     }
 
@@ -803,6 +843,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaSingleLine(gsl) => &gsl.traces,
             PanelTypeUnion::GrafanaMultiLine(gml) => &gml.traces,
             PanelTypeUnion::GrafanaExtValues(gextv) => &gextv.traces,
+            PanelTypeUnion::GrafanaCalendar(gc) => &gc.traces,
         }
     // fn get_locations TODO
     }
@@ -919,6 +960,7 @@ impl FromStr for PanelType {
             "smartcomm-simpleline-panel" => Ok(PanelType::GrafanaSingleLine),
             "smartcomm-multiplelinechart-panel" => Ok(PanelType::GrafanaMultiLine),
             "smartcomm-extreme-values-panel" => Ok(PanelType::GrafanaExtValues),
+            "smartcomm-calendar-panel" => Ok(PanelType::GrafanaCalendar),
             _ => Err(format!("invalid panel type: {}", input)),
         }
     }
@@ -1026,6 +1068,7 @@ impl ToString for PanelTypeUnion<'_> {
             PanelTypeUnion::GrafanaSingleLine(_) => String::from("smartcomm-simpleline-panel"),
             PanelTypeUnion::GrafanaMultiLine(_) => String::from("smartcomm-multiplelinechart-panel"),
             PanelTypeUnion::GrafanaExtValues(_) => String::from("smartcomm-extreme-values-panel"),
+            PanelTypeUnion::GrafanaCalendar(_) => String::from("smartcomm-calendar-panel"),
         }
     }
 }
@@ -1042,6 +1085,7 @@ impl ToString for PanelType {
             PanelType::GrafanaSingleLine => String::from("smartcomm-simpleline-panel"),
             PanelType::GrafanaMultiLine => String::from("smartcomm-multiplelinechart-panel"),
             PanelType::GrafanaExtValues => String::from("smartcomm-extreme-values-panel"),
+            PanelType::GrafanaCalendar => String::from("smartcomm-calendar-panel"),
         }
     }
 }
@@ -1138,6 +1182,7 @@ impl<'a> From<PanelTypeUnion<'a>> for &'a str {
             PanelTypeUnion::GrafanaSingleLine(_) => "smartcomm-simpleline-panel",
             PanelTypeUnion::GrafanaMultiLine(_) => "smartcomm-multiplelinechart-panel",
             PanelTypeUnion::GrafanaExtValues(_) => "smartcomm-extreme-values-panel",
+            PanelTypeUnion::GrafanaCalendar(_) => "smartcomm-calendar-panel",
         }
     }
 }
@@ -1154,6 +1199,7 @@ impl<'a> From<PanelType> for &'a str {
             PanelType::GrafanaSingleLine => "smartcomm-simpleline-panel",
             PanelType::GrafanaMultiLine => "smartcomm-multiplelinechart-panel",
             PanelType::GrafanaExtValues => "smartcomm-extreme-values-panel",
+            PanelType::GrafanaCalendar => "smartcomm-calendar-panel",
         }
     }
 }
