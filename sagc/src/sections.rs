@@ -150,7 +150,6 @@ pub struct GrafanaMap<'a> {
     pub r#type: PanelType,
     pub source: &'a str,
     pub traces: Vec<&'a str>,
-    pub area: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -498,14 +497,12 @@ impl<'a> GrafanaMap<'a> {
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
-        let area = parse!(block, Option<&str>, block_name, "label");
 
         Ok(GrafanaMap {
             r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
             traces,
-            area,
         })
     }
 }
@@ -795,6 +792,7 @@ trait Panel {
     fn get_source(&self) -> &str;
     fn get_label(&self) -> Option<&str>;
     fn get_traces(&self) -> &Vec<&str>;
+    fn get_locations(&self) -> Option<&Vec<&str>>;
 }
 
 impl<'a> Panel for PanelTypeUnion<'a> {
@@ -841,7 +839,22 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaExtValues(gextv) => &gextv.traces,
             PanelTypeUnion::GrafanaCalendar(gc) => &gc.traces,
         }
-    // fn get_locations TODO
+    }
+
+    fn get_locations(&self) -> Option<&Vec<&str>> {
+        match self {
+            PanelTypeUnion::GeoMap(_) => None,
+            PanelTypeUnion::XYChart(_) => None,
+            PanelTypeUnion::PieChart(_) => None,
+            PanelTypeUnion::BarChart(_) => None,
+            PanelTypeUnion::TimeSeries(_) => None,
+            PanelTypeUnion::GrafanaMap(_) => None,
+            PanelTypeUnion::GrafanaSingleLine(_) => None,
+            PanelTypeUnion::GrafanaMultiLine(gml) => Some(&gml.locations),
+            PanelTypeUnion::GrafanaExtValues(gextv) => Some(&gextv.locations),
+            PanelTypeUnion::GrafanaCalendar(gc) => Some(&gc.locations),
+        }
+
     }
 }
 
