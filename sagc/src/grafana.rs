@@ -1,6 +1,6 @@
 use crate::sections::{
     Application, BarChart, Config, Datasource, Deployment, Environment, GeoMap, PanelTypeUnion,
-    PieChart, Service, TimeSeries, Version, XYChart, GrafanaMap, GrafanaSingleLine, GrafanaMultiLine
+    PieChart, Service, TimeSeries, Version, XYChart, GrafanaMap, GrafanaSingleLine, GrafanaMultiLine, GrafanaExtValues, GrafanaCalendar
 };
 
 use serde::{de::value, Serialize};
@@ -112,6 +112,24 @@ struct MultiLine {
 }
 
 #[derive(Debug, Serialize)]
+struct Calendar {
+    #[serde(rename="type")]
+    chart_type: String,
+    source: String,
+    traces: Vec<String>,
+    locations: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ExtValues {
+    #[serde(rename="typex")]
+    chart_type: String,
+    source: String,
+    traces: Vec<String>,
+    locations: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 enum GrafanaPanel {
     #[serde(rename = "pie_chart")]
@@ -130,6 +148,10 @@ enum GrafanaPanel {
     GrafanaSingleLine(SingleLine),
     #[serde(rename="smartcomm-multiplelinechart-panel")]
     GrafanaMultiLine(MultiLine),
+    #[serde(rename="smartcomm-extreme-values-panel")]
+    GrafanaExtValues(ExtValues),
+    #[serde(rename="smartcomm-calendar-panel")]
+    GrafanaCalendar(Calendar),
     NotSupported,
 }
 
@@ -268,6 +290,28 @@ impl <'a> From<GrafanaMultiLine<'a>> for MultiLine {
     }
 }
 
+impl <'a> From<GrafanaExtValues<'a>> for ExtValues {
+    fn from(value: GrafanaExtValues<'a>) -> Self {
+        ExtValues {
+            chart_type: value.r#type.to_string(),
+            source: value.source.to_string(),
+            traces: value.traces.iter().map(|f| f.to_string()).collect(),
+            locations: value.locations.iter().map(|f| f.to_string()).collect(),
+        }
+    }
+}
+
+impl <'a> From<GrafanaCalendar<'a>> for Calendar {
+    fn from(value: GrafanaCalendar<'a>) -> Self {
+        Calendar {
+            chart_type: value.r#type.to_string(),
+            source: value.source.to_string(),
+            traces: value.traces.iter().map(|f| f.to_string()).collect(),
+            locations: value.locations.iter().map(|f| f.to_string()).collect(),
+        }
+    }
+}
+
 impl<'a> From<Application<'a>> for GrafanaApplication {
     fn from(value: Application<'a>) -> Self {
         GrafanaApplication {
@@ -293,8 +337,8 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         PanelTypeUnion::GrafanaMap(gr_map) => GrafanaPanel::GrafanaMap(gr_map.into()),
                         PanelTypeUnion::GrafanaSingleLine(g_sline) => GrafanaPanel::GrafanaSingleLine(g_sline.into()),
                         PanelTypeUnion::GrafanaMultiLine(g_mline) => GrafanaPanel::GrafanaMultiLine(g_mline.into()),
-                        PanelTypeUnion::GrafanaExtValues(_) => GrafanaPanel::NotSupported,
-                        PanelTypeUnion::GrafanaCalendar(_) => GrafanaPanel::NotSupported,
+                        PanelTypeUnion::GrafanaExtValues(g_ext) => GrafanaPanel::GrafanaExtValues(g_ext.into()),
+                        PanelTypeUnion::GrafanaCalendar(g_calendar) => GrafanaPanel::GrafanaCalendar(g_calendar.into()),
                     };
                     (name.to_string(), grafana_panel)
                 })
