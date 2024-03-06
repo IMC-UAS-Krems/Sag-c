@@ -1,6 +1,6 @@
 use crate::sections::{
     Application, BarChart, Config, Datasource, Deployment, Environment, GeoMap, PanelTypeUnion,
-    PieChart, Service, TimeSeries, Version, XYChart, GrafanaMap, GrafanaSingleLine
+    PieChart, Service, TimeSeries, Version, XYChart, GrafanaMap, GrafanaSingleLine, GrafanaMultiLine
 };
 
 use serde::{de::value, Serialize};
@@ -102,6 +102,16 @@ struct SingleLine {
 }
 
 #[derive(Debug, Serialize)]
+struct MultiLine {
+    #[serde(rename="type")]
+    chart_type: String,
+    source: String,
+    traces: Vec<String>,
+    locations: Vec<String>,
+
+}
+
+#[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 enum GrafanaPanel {
     #[serde(rename = "pie_chart")]
@@ -118,6 +128,8 @@ enum GrafanaPanel {
     GrafanaMap(GrafanaPluginGMap),
     #[serde(rename="smartcomm-simpleline-panel")]
     GrafanaSingleLine(SingleLine),
+    #[serde(rename="smartcomm-multiplelinechart-panel")]
+    GrafanaMultiLine(MultiLine),
     NotSupported,
 }
 
@@ -245,6 +257,17 @@ impl <'a> From<GrafanaSingleLine<'a>> for SingleLine {
     }
 }
 
+impl <'a> From<GrafanaMultiLine<'a>> for MultiLine {
+    fn from(value: GrafanaMultiLine<'a>) -> Self {
+        MultiLine {
+            chart_type: value.r#type.to_string(),
+            source: value.source.to_string(),
+            traces: value.traces.iter().map(|f| f.to_string()).collect(),
+            locations: value.locations.iter().map(|f| f.to_string()).collect(),
+        }
+    }
+}
+
 impl<'a> From<Application<'a>> for GrafanaApplication {
     fn from(value: Application<'a>) -> Self {
         GrafanaApplication {
@@ -269,7 +292,7 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         PanelTypeUnion::XYChart(xy_chart) => GrafanaPanel::XYChart(xy_chart.into()),
                         PanelTypeUnion::GrafanaMap(gr_map) => GrafanaPanel::GrafanaMap(gr_map.into()),
                         PanelTypeUnion::GrafanaSingleLine(g_sline) => GrafanaPanel::GrafanaSingleLine(g_sline.into()),
-                        PanelTypeUnion::GrafanaMultiLine(_) => GrafanaPanel::NotSupported,
+                        PanelTypeUnion::GrafanaMultiLine(g_mline) => GrafanaPanel::GrafanaMultiLine(g_mline.into()),
                         PanelTypeUnion::GrafanaExtValues(_) => GrafanaPanel::NotSupported,
                         PanelTypeUnion::GrafanaCalendar(_) => GrafanaPanel::NotSupported,
                     };
