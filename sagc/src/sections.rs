@@ -147,10 +147,9 @@ pub struct GeoMap<'a> {
 
 #[derive(Debug)]
 pub struct GrafanaMap<'a> {
-    pub label: &'a str,
     pub r#type: PanelType,
     pub source: &'a str,
-    pub data: Vec<&'a str>,
+    pub traces: Vec<&'a str>,
     pub area: Option<&'a str>,
 }
 
@@ -496,19 +495,16 @@ impl<'a> GrafanaMap<'a> {
                 "{block_name} section is not a block"
             )));
         }
-
-        let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
-        let data = parse!(block, Vec<&str>, block_name, "data");
+        let traces = parse!(block, Vec<&str>, block_name, "traces");
         let area = parse!(block, Option<&str>, block_name, "label");
 
         Ok(GrafanaMap {
-            label,
             r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
-            data,
+            traces,
             area,
         })
     }
@@ -824,7 +820,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::PieChart(pie) => Some(pie.label),
             PanelTypeUnion::BarChart(bar) => Some(bar.label),
             PanelTypeUnion::TimeSeries(ts) => Some(ts.label),
-            PanelTypeUnion::GrafanaMap(gm) => Some(gm.label),
+            PanelTypeUnion::GrafanaMap(_) => None,
             PanelTypeUnion::GrafanaSingleLine(_) => None,
             PanelTypeUnion::GrafanaMultiLine(_) => None,
             PanelTypeUnion::GrafanaExtValues(_) => None,
@@ -839,7 +835,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::PieChart(pie) => &pie.traces,
             PanelTypeUnion::BarChart(bar) => &bar.traces,
             PanelTypeUnion::TimeSeries(ts) => &ts.traces,
-            PanelTypeUnion::GrafanaMap(gm) => &gm.data,
+            PanelTypeUnion::GrafanaMap(gm) => &gm.traces,
             PanelTypeUnion::GrafanaSingleLine(gsl) => &gsl.traces,
             PanelTypeUnion::GrafanaMultiLine(gml) => &gml.traces,
             PanelTypeUnion::GrafanaExtValues(gextv) => &gextv.traces,
