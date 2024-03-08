@@ -69,7 +69,7 @@ MultiLine:
     traces -> dateObserved, NOx, O3, NO2
 
 ExtremeValues:
-    type is smartcomm-extreme-values-panel
+    type is smartcomm-extremevalues-panel
     source is first
     locations -> Escuelas Aguirre, Arturo Soria, Villaverde
     traces -> NOx, O3, NO2, SO2

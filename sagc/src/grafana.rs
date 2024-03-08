@@ -122,7 +122,7 @@ struct Calendar {
 
 #[derive(Debug, Serialize)]
 struct ExtValues {
-    #[serde(rename="typex")]
+    #[serde(rename="type")]
     chart_type: String,
     source: String,
     traces: Vec<String>,

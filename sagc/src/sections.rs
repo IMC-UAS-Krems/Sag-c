@@ -968,7 +968,7 @@ impl FromStr for PanelType {
             "smartcomm-map-panel" => Ok(PanelType::GrafanaMap),
             "smartcomm-simpleline-panel" => Ok(PanelType::GrafanaSingleLine),
             "smartcomm-multiplelinechart-panel" => Ok(PanelType::GrafanaMultiLine),
-            "smartcomm-extreme-values-panel" => Ok(PanelType::GrafanaExtValues),
+            "smartcomm-extremevalues-panel" => Ok(PanelType::GrafanaExtValues),
             "smartcomm-calendar-panel" => Ok(PanelType::GrafanaCalendar),
             _ => Err(format!("invalid panel type: {}", input)),
         }
@@ -1076,7 +1076,7 @@ impl ToString for PanelTypeUnion<'_> {
             PanelTypeUnion::GrafanaMap(_) => String::from("smartcomm-map-panel"),
             PanelTypeUnion::GrafanaSingleLine(_) => String::from("smartcomm-simpleline-panel"),
             PanelTypeUnion::GrafanaMultiLine(_) => String::from("smartcomm-multiplelinechart-panel"),
-            PanelTypeUnion::GrafanaExtValues(_) => String::from("smartcomm-extreme-values-panel"),
+            PanelTypeUnion::GrafanaExtValues(_) => String::from("smartcomm-extremevalues-panel"),
             PanelTypeUnion::GrafanaCalendar(_) => String::from("smartcomm-calendar-panel"),
         }
     }
@@ -1093,7 +1093,7 @@ impl ToString for PanelType {
             PanelType::GrafanaMap => String::from("smartcomm-map-panel"),
             PanelType::GrafanaSingleLine => String::from("smartcomm-simpleline-panel"),
             PanelType::GrafanaMultiLine => String::from("smartcomm-multiplelinechart-panel"),
-            PanelType::GrafanaExtValues => String::from("smartcomm-extreme-values-panel"),
+            PanelType::GrafanaExtValues => String::from("smartcomm-extremevalues-panel"),
             PanelType::GrafanaCalendar => String::from("smartcomm-calendar-panel"),
         }
     }
@@ -1190,7 +1190,7 @@ impl<'a> From<PanelTypeUnion<'a>> for &'a str {
             PanelTypeUnion::GrafanaMap(_) => "smartcomm-map-panel",
             PanelTypeUnion::GrafanaSingleLine(_) => "smartcomm-simpleline-panel",
             PanelTypeUnion::GrafanaMultiLine(_) => "smartcomm-multiplelinechart-panel",
-            PanelTypeUnion::GrafanaExtValues(_) => "smartcomm-extreme-values-panel",
+            PanelTypeUnion::GrafanaExtValues(_) => "smartcomm-extremevalues-panel",
             PanelTypeUnion::GrafanaCalendar(_) => "smartcomm-calendar-panel",
         }
     }
@@ -1207,7 +1207,7 @@ impl<'a> From<PanelType> for &'a str {
             PanelType::GrafanaMap => "smartcomm-map-panel",
             PanelType::GrafanaSingleLine => "smartcomm-simpleline-panel",
             PanelType::GrafanaMultiLine => "smartcomm-multiplelinechart-panel",
-            PanelType::GrafanaExtValues => "smartcomm-extreme-values-panel",
+            PanelType::GrafanaExtValues => "smartcomm-extremevalues-panel",
             PanelType::GrafanaCalendar => "smartcomm-calendar-panel",
         }
     }
