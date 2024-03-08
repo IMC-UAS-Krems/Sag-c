@@ -148,7 +148,7 @@ enum GrafanaPanel {
     GrafanaSingleLine(SingleLine),
     #[serde(rename="smartcomm-multiplelinechart-panel")]
     GrafanaMultiLine(MultiLine),
-    #[serde(rename="smartcomm-extreme-values-panel")]
+    #[serde(rename="smartcomm-extremevalues-panel")]
     GrafanaExtValues(ExtValues),
     #[serde(rename="smartcomm-calendar-panel")]
     GrafanaCalendar(Calendar),
@@ -334,7 +334,7 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         }
                         PanelTypeUnion::GeoMap(geo_map) => GrafanaPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => GrafanaPanel::XYChart(xy_chart.into()),
-                        PanelTypeUnion::GrafanaMap(gr_map) => GrafanaPanel::GrafanaMap(gr_map.into()),
+                        PanelTypeUnion::GrafanaMap(_) => GrafanaPanel::NotSupported,
                         PanelTypeUnion::GrafanaSingleLine(g_sline) => GrafanaPanel::GrafanaSingleLine(g_sline.into()),
                         PanelTypeUnion::GrafanaMultiLine(g_mline) => GrafanaPanel::GrafanaMultiLine(g_mline.into()),
                         PanelTypeUnion::GrafanaExtValues(g_ext) => GrafanaPanel::GrafanaExtValues(g_ext.into()),
