@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use crate::parser::Position;
 
 #[derive(Serialize)]
+#[serde(untagged)]
 pub enum SagError {
     LanguageError(LanguageError),
     ParsingError(ParsingError),
