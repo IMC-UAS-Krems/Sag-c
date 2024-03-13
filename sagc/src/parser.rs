@@ -16,8 +16,9 @@ use std::collections::HashMap;
 type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;
 type IResultVec<'a> = nom::IResult<Span<'a>, Vec<Token<'a>>>;
 type Span<'a> = LocatedSpan<&'a str>;
-const INDENT: usize = 4;
 pub type Blocks<'a> = HashMap<&'a str, ParseResult<'a>>;
+
+const INDENT: usize = 4;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Position {
@@ -93,9 +94,11 @@ pub enum Value<'a> {
 fn parse_block_name(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
+
     terminated(alpha1, tag(":"))(input).map(|(input, result)| {
         let (input, _) =
             take_while::<_, nom_locate::LocatedSpan<&str>, ()>(|c| c == '\n')(input).unwrap();
+
         let position = Position {
             row_start: line,
             row_end: line,
@@ -115,6 +118,7 @@ fn parse_block_name(input: Span) -> IResult {
 fn parse_section_name(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
+
     recognize(many1_count(alt((alpha1, tag("_")))))(input).map(|(input, result)| {
         let position = Position {
             row_start: line,
@@ -162,6 +166,7 @@ fn parse_vec(input: Span) -> IResult {
 fn parse_value(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
+
     take_until("\n")(input).map(|(input, result)| {
         let position = Position {
             row_start: line,
@@ -182,6 +187,7 @@ fn parse_value(input: Span) -> IResult {
 fn parse_separator(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
+
     alt((tag(" -> "), tag(" is ")))(input).map(|(input, result)| {
         let position = Position {
             row_start: line,
@@ -221,6 +227,7 @@ fn parse_section_line(input: Span) -> IResultVec {
 
     let (input, _) =
         take_while::<_, nom_locate::LocatedSpan<&str>, ()>(|c| c == '\n')(input).unwrap();
+
     Ok((input, to_return))
 }
 
@@ -229,10 +236,11 @@ fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
         TokenValue::IndentError | TokenValue::UnparsableError => (),
         _ => unreachable!("No, no, no... Do not do this"),
     }
+
     let line = input.location_line() as usize;
     let col_start = input.get_column();
+
     take_until("\n")(input).map(|(input, result)| {
-        // pop \n from the input
         let (input, _) =
             take_while::<_, nom_locate::LocatedSpan<&str>, ()>(|c| c == '\n')(input).unwrap();
 
@@ -333,6 +341,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
     let mut blocks: HashMap<&str, ParseResult> = HashMap::new();
     let mut last_blocks = Vec::new();
     let mut tokens = tokens.iter();
+
     while tokens.len() > 0 {
         let token = tokens.next().unwrap();
         match token.value {
