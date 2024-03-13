@@ -294,6 +294,7 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut errors = Vec::new();
     loop {
         let result = parse_indent(input);
+        // if error, skip the line and continue
         match result {
             Ok((i, token)) => {
                 input = i;
@@ -306,6 +307,7 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
                 continue;
             }
         }
+        // if error, try to parse section line (like `alt` in nom)
         if let Ok((i, result)) = parse_block_name(input) {
             input = i;
             tokens.push(result);
@@ -314,6 +316,7 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
             }
             continue;
         }
+        // final parser, either parse section line or handle error
         let result = parse_section_line(input);
         match result {
             Ok((i, token)) => {
@@ -337,11 +340,14 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     }
 }
 
+/// Convert tokens to HashMap for easy access
 fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
     let mut blocks: HashMap<&str, ParseResult> = HashMap::new();
+    // vec to track keys of blocks, e.g ["a", "b", "c"] -> a.b.c
     let mut last_blocks = Vec::new();
     let mut tokens = tokens.iter();
 
+    // 3 main cases: indent, block, section
     while tokens.len() > 0 {
         let token = tokens.next().unwrap();
         match token.value {
@@ -350,6 +356,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
                     last_blocks.pop();
                 }
             }
+
             TokenValue::Block(name) => {
                 let current_block = last_blocks.iter().fold(blocks.borrow_mut(), |b, k| {
                     if let Value::Block(b) = b
@@ -368,8 +375,8 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
                     ParseResult::new(token.position, Value::Block(HashMap::new())),
                 );
                 last_blocks.push(name);
-                continue;
             }
+
             TokenValue::Section(name) => {
                 let current_block = last_blocks.iter().fold(blocks.borrow_mut(), |b, k| {
                     if let Value::Block(b) = b
@@ -383,6 +390,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
                         unreachable!()
                     }
                 });
+
                 let sep = tokens.next().unwrap();
                 match sep.value {
                     TokenValue::Arrow => {
@@ -396,6 +404,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
                             ParseResult::new(token.position, Value::Vec(value.to_vec())),
                         );
                     }
+
                     TokenValue::Is => {
                         let token = tokens.next().unwrap();
                         let value = match token.value {
@@ -405,6 +414,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
                         current_block
                             .insert(name, ParseResult::new(token.position, Value::String(value)));
                     }
+
                     _ => unreachable!(),
                 }
             }
@@ -417,6 +427,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
 pub fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
     let input = Span::new(input);
     let result = lexer(input);
+
     match result {
         Ok(tokens) => {
             let blocks = tokens_to_blocks(tokens);
@@ -436,8 +447,6 @@ pub fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
     }
 }
 
-// pub type Block<'a> = HashMap<&'a str, Line<'a>>;
-
 pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
     let blocks = match parse_lines(input) {
         Ok(blocks) => blocks,
@@ -445,11 +454,13 @@ pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
             return Err(e);
         }
     };
+
     let config = match Config::new(&blocks) {
         Ok(config) => config,
         Err(e) => {
             return Err(vec![e]);
         }
     };
+
     Ok(config)
 }
