@@ -6,7 +6,7 @@ macro_rules! parse {
         match $map {
             Value::Block(map) => match map.get($field_name) {
                 Some(field) => Some(
-                    TryInto::<$fty>::try_into(field)
+                    TryInto::<$fty>::try_into(&field.value)
                         .map_err(|e| SagError::parsing_error($block_name, Some($field_name), e))?,
                 ),
                 None => None,
@@ -18,7 +18,7 @@ macro_rules! parse {
         match $map {
             Value::Block(map) => match map.get($field_name) {
                 Some(field) => {
-                    let result: Result<$fty, _> = TryInto::<$fty>::try_into(field);
+                    let result: Result<$fty, _> = TryInto::<$fty>::try_into(&field.value);
                     result
                         .map_err(|e| SagError::parsing_error($block_name, Some($field_name), e))?
                 }

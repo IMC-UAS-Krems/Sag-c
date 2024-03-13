@@ -115,8 +115,8 @@ pub enum PanelTypeUnion<'a> {
     BarChart(BarChart<'a>),
     GeoMap(GeoMap<'a>),
     XYChart(XYChart<'a>),
-    GrafanaMap(GrafanaMap<'a>,),
-    GrafanaSingleLine(GrafanaSingleLine<'a>,),
+    GrafanaMap(GrafanaMap<'a>),
+    GrafanaSingleLine(GrafanaSingleLine<'a>),
     GrafanaMultiLine(GrafanaMultiLine<'a>),
     GrafanaExtValues(GrafanaExtValues<'a>),
     GrafanaCalendar(GrafanaCalendar<'a>),
@@ -282,9 +282,10 @@ impl<'a> Service<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
         const SECTION_NAME: &str = "service";
 
-        let block = blocks
+        let block = &blocks
             .get(SECTION_NAME)
-            .ok_or(SagError::missing_section(SECTION_NAME))?;
+            .ok_or(SagError::missing_section(SECTION_NAME))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::parsing_error(
@@ -300,7 +301,7 @@ impl<'a> Service<'a> {
 
         let test = match block {
             Value::Block(block) => match block.get("test") {
-                Some(value) => Some(Test::new(value)?),
+                Some(value) => Some(Test::new(&value.value)?),
                 None => None,
             },
             _ => {
@@ -334,9 +335,10 @@ impl<'a> SagData<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
         const SECTION_NAME: &str = "data";
 
-        let data = blocks
+        let data = &blocks
             .get(SECTION_NAME)
-            .ok_or(SagError::missing_section(SECTION_NAME))?;
+            .ok_or(SagError::missing_section(SECTION_NAME))?
+            .value;
 
         let mut data_sources_map: HashMap<&str, Datasource> = HashMap::new();
 
@@ -359,9 +361,10 @@ impl<'a> SagData<'a> {
 
 impl<'a> Datasource<'a> {
     fn new(blocks: &Blocks<'a>, source_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(source_name)
-            .ok_or(SagError::missing_section(source_name))?;
+            .ok_or(SagError::missing_section(source_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -392,9 +395,10 @@ impl<'a> Application<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
         const SECTION_NAME: &str = "application";
 
-        let block = blocks
+        let block = &blocks
             .get(SECTION_NAME)
-            .ok_or(SagError::missing_section(SECTION_NAME))?;
+            .ok_or(SagError::missing_section(SECTION_NAME))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -410,9 +414,10 @@ impl<'a> Application<'a> {
         let mut panels_map = HashMap::new();
 
         for panel_name in panels {
-            let panel = blocks
+            let panel = &blocks
                 .get(panel_name)
-                .ok_or(SagError::missing_section(panel_name))?;
+                .ok_or(SagError::missing_section(panel_name))?
+                .value;
 
             if !panel.is_block() {
                 return Err(SagError::error(format!(
@@ -433,11 +438,21 @@ impl<'a> Application<'a> {
                 PanelType::BarChart => PanelTypeUnion::BarChart(BarChart::new(blocks, panel_name)?),
                 PanelType::GeoMap => PanelTypeUnion::GeoMap(GeoMap::new(blocks, panel_name)?),
                 PanelType::XYChart => PanelTypeUnion::XYChart(XYChart::new(blocks, panel_name)?),
-                PanelType::GrafanaMap => PanelTypeUnion::GrafanaMap(GrafanaMap::new(blocks,panel_name)?),
-                PanelType::GrafanaSingleLine => PanelTypeUnion::GrafanaSingleLine(GrafanaSingleLine::new(blocks, panel_name)?),
-                PanelType::GrafanaMultiLine => PanelTypeUnion::GrafanaMultiLine(GrafanaMultiLine::new(blocks, panel_name)?),
-                PanelType::GrafanaExtValues => PanelTypeUnion::GrafanaExtValues(GrafanaExtValues::new(blocks, panel_name)?),
-                PanelType::GrafanaCalendar => PanelTypeUnion::GrafanaCalendar(GrafanaCalendar::new(blocks, panel_name)?),
+                PanelType::GrafanaMap => {
+                    PanelTypeUnion::GrafanaMap(GrafanaMap::new(blocks, panel_name)?)
+                }
+                PanelType::GrafanaSingleLine => {
+                    PanelTypeUnion::GrafanaSingleLine(GrafanaSingleLine::new(blocks, panel_name)?)
+                }
+                PanelType::GrafanaMultiLine => {
+                    PanelTypeUnion::GrafanaMultiLine(GrafanaMultiLine::new(blocks, panel_name)?)
+                }
+                PanelType::GrafanaExtValues => {
+                    PanelTypeUnion::GrafanaExtValues(GrafanaExtValues::new(blocks, panel_name)?)
+                }
+                PanelType::GrafanaCalendar => {
+                    PanelTypeUnion::GrafanaCalendar(GrafanaCalendar::new(blocks, panel_name)?)
+                }
             };
 
             panels_map.insert(panel_name, panel_type_union);
@@ -456,9 +471,10 @@ impl<'a> Application<'a> {
 
 impl<'a> GeoMap<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -485,9 +501,10 @@ impl<'a> GeoMap<'a> {
 
 impl<'a> GrafanaMap<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -509,9 +526,10 @@ impl<'a> GrafanaMap<'a> {
 
 impl<'a> PieChart<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -546,9 +564,10 @@ impl<'a> PieChart<'a> {
 
 impl<'a> BarChart<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -573,9 +592,10 @@ impl<'a> BarChart<'a> {
 
 impl<'a> TimeSeries<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -600,9 +620,10 @@ impl<'a> TimeSeries<'a> {
 
 impl<'a> XYChart<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -625,11 +646,12 @@ impl<'a> XYChart<'a> {
     }
 }
 
-impl <'a> GrafanaSingleLine<'a> {
+impl<'a> GrafanaSingleLine<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -640,7 +662,7 @@ impl <'a> GrafanaSingleLine<'a> {
         let source = parse!(block, &str, block_name, "source");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
-        Ok(GrafanaSingleLine{
+        Ok(GrafanaSingleLine {
             r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
@@ -649,11 +671,12 @@ impl <'a> GrafanaSingleLine<'a> {
     }
 }
 
-impl <'a> GrafanaMultiLine<'a> {
+impl<'a> GrafanaMultiLine<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -665,7 +688,7 @@ impl <'a> GrafanaMultiLine<'a> {
         let locations = parse!(block, Vec<&str>, block_name, "locations");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
-        Ok(GrafanaMultiLine{
+        Ok(GrafanaMultiLine {
             r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
@@ -675,11 +698,12 @@ impl <'a> GrafanaMultiLine<'a> {
     }
 }
 
-impl <'a> GrafanaExtValues<'a> {
+impl<'a> GrafanaExtValues<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -691,7 +715,7 @@ impl <'a> GrafanaExtValues<'a> {
         let locations = parse!(block, Vec<&str>, block_name, "locations");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
-        Ok(GrafanaExtValues{
+        Ok(GrafanaExtValues {
             r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
@@ -701,11 +725,12 @@ impl <'a> GrafanaExtValues<'a> {
     }
 }
 
-impl <'a> GrafanaCalendar<'a> {
+impl<'a> GrafanaCalendar<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -717,7 +742,7 @@ impl <'a> GrafanaCalendar<'a> {
         let locations = parse!(block, Vec<&str>, block_name, "locations");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
-        Ok(GrafanaCalendar{
+        Ok(GrafanaCalendar {
             r#type: PanelType::from_str(r#type)
                 .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
             source,
@@ -725,16 +750,16 @@ impl <'a> GrafanaCalendar<'a> {
             traces,
         })
     }
-
 }
 
 impl<'a> Deployment<'a> {
     fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
         const SECTION_NAME: &str = "deployment";
 
-        let block = blocks
+        let block = &blocks
             .get(SECTION_NAME)
-            .ok_or(SagError::missing_section(SECTION_NAME))?;
+            .ok_or(SagError::missing_section(SECTION_NAME))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -759,9 +784,10 @@ impl<'a> Deployment<'a> {
 
 impl<'a> Environment<'a> {
     fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = blocks
+        let block = &blocks
             .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?;
+            .ok_or(SagError::missing_section(block_name))?
+            .value;
 
         if !block.is_block() {
             return Err(SagError::error(format!(
@@ -854,7 +880,6 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaExtValues(gextv) => Some(&gextv.locations),
             PanelTypeUnion::GrafanaCalendar(gc) => Some(&gc.locations),
         }
-
     }
 }
 
@@ -1075,7 +1100,9 @@ impl ToString for PanelTypeUnion<'_> {
             PanelTypeUnion::XYChart(_) => String::from("xy_chart"),
             PanelTypeUnion::GrafanaMap(_) => String::from("smartcomm-map-panel"),
             PanelTypeUnion::GrafanaSingleLine(_) => String::from("smartcomm-simpleline-panel"),
-            PanelTypeUnion::GrafanaMultiLine(_) => String::from("smartcomm-multiplelinechart-panel"),
+            PanelTypeUnion::GrafanaMultiLine(_) => {
+                String::from("smartcomm-multiplelinechart-panel")
+            }
             PanelTypeUnion::GrafanaExtValues(_) => String::from("smartcomm-extremevalues-panel"),
             PanelTypeUnion::GrafanaCalendar(_) => String::from("smartcomm-calendar-panel"),
         }

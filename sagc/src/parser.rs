@@ -1,30 +1,61 @@
 use crate::{errors::SagError, sections::Config};
-use nom::character::complete::space1;
+use nom::bytes::complete::{tag, take_until, take_while};
+use nom::character::complete::{char, newline, space1};
 use nom::error::context;
 use nom::{
     branch::alt,
-    bytes::complete::tag,
     character::complete::{alpha1, alphanumeric1, space0},
     combinator::{map_res, recognize, verify},
     multi::{many1_count, separated_list0},
-    sequence::{pair, terminated},
-    Err,
+    sequence::terminated,
 };
+use nom_locate::LocatedSpan;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 
-// pub type Block<'a> = HashMap<&'a str, Line<'a>>;
-pub type Blocks<'a> = HashMap<&'a str, Value<'a>>;
-
-pub type IResult<'a, O> = nom::IResult<&'a str, O>;
-
+pub type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;
+pub type IResultVec<'a> = nom::IResult<Span<'a>, Vec<Token<'a>>>;
+type Span<'a> = LocatedSpan<&'a str>;
 const INDENT: usize = 4;
+pub type Blocks<'a> = HashMap<&'a str, ParseResult<'a>>;
+
+#[derive(Debug, Copy, Clone)]
+pub struct Position {
+    pub row_start: usize,
+    pub row_end: usize,
+    pub col_start: usize,
+    pub col_end: usize,
+}
 
 #[derive(Debug)]
-pub enum Value<'a> {
-    String(&'a str),
-    Vec(Vec<&'a str>),
-    Block(HashMap<&'a str, Value<'a>>),
+enum TokenValue<'a> {
+    Indent(usize),
+    Block(&'a str),
+    Section(&'a str),
+    ValueStr(&'a str),
+    ValueVec(Vec<&'a str>),
+    Is,
+    Arrow,
+    IndentError,
+    UnparsbableError,
+}
+
+#[derive(Debug)]
+struct Token<'a> {
+    position: Position,
+    value: TokenValue<'a>,
+}
+
+#[derive(Debug)]
+pub struct ParseResult<'a> {
+    pub position: Position,
+    pub value: Value<'a>,
+}
+
+impl ParseResult<'_> {
+    fn new<'a>(position: Position, value: Value<'a>) -> ParseResult<'a> {
+        ParseResult { position, value }
+    }
 }
 
 impl<'a> TryInto<&'a str> for &Value<'a> {
@@ -52,117 +83,343 @@ impl<'a> Value<'a> {
         matches!(self, Value::Block(_))
     }
 }
-
-fn parse_name(input: &str) -> IResult<&str> {
-    let (input, result) = recognize(many1_count(alt((alpha1, tag("_")))))(input)?;
-    Ok((input, result))
+#[derive(Debug)]
+pub enum Value<'a> {
+    String(&'a str),
+    Vec(Vec<&'a str>),
+    Block(HashMap<&'a str, ParseResult<'a>>),
 }
 
-fn parse_section_name(input: &str) -> IResult<&str> {
-    let (input, result) = terminated(alpha1, tag(":"))(input)?;
-    Ok((input, result))
+fn parse_block_name(input: Span) -> IResult {
+    let line = input.location_line() as usize;
+    let col_start = input.get_column();
+    terminated(alpha1, tag(":"))(input).map(|(input, result)| {
+        let (input, _) =
+            take_while::<_, nom_locate::LocatedSpan<&str>, ()>(|c| c == '\n')(input).unwrap();
+        let position = Position {
+            row_start: line,
+            row_end: line,
+            col_start,
+            col_end: col_start + result.len(),
+        };
+        (
+            input,
+            Token {
+                position,
+                value: TokenValue::Block(result.fragment()),
+            },
+        )
+    })
 }
 
-fn parse_vec(input: &str) -> IResult<Value> {
-    let (input, items) = separated_list0(
+fn parse_section_name(input: Span) -> IResult {
+    let line = input.location_line() as usize;
+    let col_start = input.get_column();
+    recognize(many1_count(alt((alpha1, tag("_")))))(input).map(|(input, result)| {
+        let position = Position {
+            row_start: line,
+            row_end: line,
+            col_start,
+            col_end: col_start + result.len(),
+        };
+        (
+            input,
+            Token {
+                position,
+                value: TokenValue::Section(result.fragment()),
+            },
+        )
+    })
+}
+
+fn parse_vec(input: Span) -> IResult {
+    let line = input.location_line() as usize;
+    let col_start = input.get_column();
+
+    separated_list0(
         alt((tag(", "), tag(","))),
         recognize(many1_count(alt((alphanumeric1, space1, tag("."))))),
-    )(input)?;
-
-    Ok((input, Value::Vec(items)))
+    )(input)
+    .map(|(input, result)| {
+        let position = Position {
+            row_start: line,
+            row_end: line,
+            col_start,
+            col_end: col_start + result.len(),
+        };
+        (
+            input,
+            Token {
+                position,
+                value: TokenValue::ValueVec(
+                    result.iter().map(|s| *s.fragment()).collect::<Vec<&str>>(),
+                ),
+            },
+        )
+    })
 }
 
-fn parse_line(input: &str) -> IResult<(&str, Value)> {
-    let (input, (name, separator)) = pair(parse_name, alt((tag(" is "), tag(" -> "))))(input)?;
-    match separator {
-        " is " => Ok(("", (name, Value::String(input)))),
-        " -> " => {
-            let (input, value) = parse_vec(input)?;
-            Ok((input, (name, value)))
-        }
-        _ => unreachable!(),
+fn parse_value(input: Span) -> IResult {
+    let line = input.location_line() as usize;
+    let col_start = input.get_column();
+    take_until("\n")(input).map(|(input, result)| {
+        let position = Position {
+            row_start: line,
+            row_end: line,
+            col_start,
+            col_end: col_start + result.len(),
+        };
+        (
+            input,
+            Token {
+                position,
+                value: TokenValue::ValueStr(result.fragment().trim_end()),
+            },
+        )
+    })
+}
+
+fn parse_separator(input: Span) -> IResult {
+    let line = input.location_line() as usize;
+    let col_start = input.get_column();
+    alt((tag(" -> "), tag(" is ")))(input).map(|(input, result)| {
+        let position = Position {
+            row_start: line,
+            row_end: line,
+            col_start,
+            col_end: col_start + result.len(),
+        };
+        (
+            input,
+            Token {
+                position,
+                value: if *result.fragment() == " -> " {
+                    TokenValue::Arrow
+                } else {
+                    TokenValue::Is
+                },
+            },
+        )
+    })
+}
+
+fn parse_section_line(input: Span) -> IResultVec {
+    let mut to_return = Vec::new();
+    let (input, result) = parse_section_name(input)?;
+    to_return.push(result);
+
+    let (input, result) = parse_separator(input)?;
+    to_return.push(result);
+
+    let sep = to_return.last().unwrap();
+    let (input, result) = if let TokenValue::Arrow = sep.value {
+        parse_vec(input)?
+    } else {
+        parse_value(input)?
+    };
+    to_return.push(result);
+
+    let (input, _) =
+        take_while::<_, nom_locate::LocatedSpan<&str>, ()>(|c| c == '\n')(input).unwrap();
+    Ok((input, to_return))
+}
+
+fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
+    match error {
+        TokenValue::IndentError | TokenValue::UnparsbableError => (),
+        _ => unreachable!("No, no, no... Do not do this"),
     }
+    let line = input.location_line() as usize;
+    let col_start = input.get_column();
+    take_until("\n")(input).map(|(input, result)| {
+        // pop \n from the input
+        let (input, _) =
+            take_while::<_, nom_locate::LocatedSpan<&str>, ()>(|c| c == '\n')(input).unwrap();
+
+        let position = Position {
+            row_start: line,
+            row_end: line,
+            col_start,
+            col_end: col_start + result.len(),
+        };
+        (
+            input,
+            Token {
+                position,
+                value: error,
+            },
+        )
+    })
 }
 
-fn parse_indent(line: &str) -> IResult<usize> {
+fn parse_indent(input: Span) -> IResult {
     // let (line, spaces) = take_till(|c| c != ' ')(line)?;
+    let line = input.location_line();
+    let column = input.get_column();
 
     context(
         "Invalid indentation",
         map_res(
-            verify(space0, |s: &str| s.len() % INDENT == 0),
-            |s: &str| Ok::<_, nom::error::Error<&str>>(s.len() / INDENT),
+            verify(space0, |s: &Span| s.len() % INDENT == 0),
+            |s: Span| Ok::<_, nom::error::Error<&str>>(s.len() / INDENT),
         ),
-    )(line)
+    )(input)
+    .map(|(input, result)| {
+        (
+            input,
+            Token {
+                position: Position {
+                    row_start: line as usize,
+                    row_end: line as usize,
+                    col_start: column,
+                    col_end: column + result * INDENT,
+                },
+                value: TokenValue::Indent(result),
+            },
+        )
+    })
+}
+
+fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
+    let mut input = input;
+    let mut tokens = Vec::new();
+    let mut errors = Vec::new();
+    loop {
+        let result = parse_indent(input);
+        match result {
+            Ok((i, token)) => {
+                input = i;
+                tokens.push(token);
+            }
+            Err(e) => {
+                let (i, token) = handle_error(input, TokenValue::IndentError).unwrap();
+                input = i;
+                errors.push(token);
+                continue;
+            }
+        }
+        if let Ok((i, result)) = parse_block_name(input) {
+            input = i;
+            tokens.push(result);
+            if input.is_empty() {
+                break;
+            }
+            continue;
+        }
+        let result = parse_section_line(input);
+        match result {
+            Ok((i, token)) => {
+                input = i;
+                tokens.extend(token);
+            }
+            Err(e) => {
+                let (i, token) = handle_error(input, TokenValue::UnparsbableError).unwrap();
+                input = i;
+                errors.push(token);
+            }
+        }
+        if input.is_empty() {
+            break;
+        }
+    }
+    if errors.is_empty() {
+        Ok(tokens)
+    } else {
+        Err(errors)
+    }
+}
+
+fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
+    let mut blocks: HashMap<&str, ParseResult> = HashMap::new();
+    let mut last_blocks = Vec::new();
+    let mut tokens = tokens.iter();
+    while tokens.len() > 0 {
+        let token = tokens.next().unwrap();
+        match token.value {
+            TokenValue::Indent(indent) => {
+                for _ in 0..last_blocks.len() - indent {
+                    last_blocks.pop();
+                }
+            }
+            TokenValue::Block(name) => {
+                let current_block = last_blocks.iter().fold(blocks.borrow_mut(), |b, k| {
+                    if let Value::Block(b) = b
+                        .get_mut(k)
+                        .expect("Key must be present")
+                        .value
+                        .borrow_mut()
+                    {
+                        b
+                    } else {
+                        unreachable!()
+                    }
+                });
+                current_block.insert(
+                    name,
+                    ParseResult::new(token.position, Value::Block(HashMap::new())),
+                );
+                last_blocks.push(name);
+                continue;
+            }
+            TokenValue::Section(name) => {
+                let current_block = last_blocks.iter().fold(blocks.borrow_mut(), |b, k| {
+                    if let Value::Block(b) = b
+                        .get_mut(k)
+                        .expect("Key must be present")
+                        .value
+                        .borrow_mut()
+                    {
+                        b
+                    } else {
+                        unreachable!()
+                    }
+                });
+                let sep = tokens.next().unwrap();
+                match sep.value {
+                    TokenValue::Arrow => {
+                        let token = tokens.next().unwrap();
+                        let value = match &token.value {
+                            TokenValue::ValueVec(value) => value,
+                            _ => unreachable!(),
+                        };
+                        current_block.insert(
+                            name,
+                            ParseResult::new(token.position, Value::Vec(value.to_vec())),
+                        );
+                    }
+                    TokenValue::Is => {
+                        let token = tokens.next().unwrap();
+                        let value = match token.value {
+                            TokenValue::ValueStr(value) => value,
+                            _ => unreachable!(),
+                        };
+                        current_block
+                            .insert(name, ParseResult::new(token.position, Value::String(value)));
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            _ => (),
+        }
+    }
+    blocks
 }
 
 pub fn parse_lines(input: &str) -> Result<Blocks, SagError> {
-    let lines = input.lines();
-    let mut blocks: Blocks = HashMap::new();
-    let mut last_blocks: Vec<&str> = Vec::new();
-
-    for (line_n, line) in lines.enumerate() {
-        let line_len = line.len();
-
-        let (line, indent_level) = parse_indent(line).map_err(|e| match e {
-            Err::Error(e) | Err::Failure(e) => {
-                SagError::invalid_char(line_n, line_len - e.input.len())
-            }
-            _ => unreachable!(),
-        })?;
-
-        if line.is_empty() {
-            continue;
+    let input = Span::new(input);
+    let result = lexer(input);
+    match result {
+        Ok(tokens) => {
+            let blocks = tokens_to_blocks(tokens);
+            return Ok(blocks);
         }
-
-        for _ in 0..last_blocks.len() - indent_level {
-            last_blocks.pop();
+        Err(errors) => {
+            return Err(SagError::error("Error parsing the input"));
         }
-
-        // pasre section name
-        if let Ok((_, name)) = parse_section_name(line) {
-            let current_block = last_blocks.iter().fold(blocks.borrow_mut(), |b, k| {
-                if let Value::Block(b) = b.get_mut(k).expect("Key must be present") {
-                    b
-                } else {
-                    unreachable!()
-                }
-            });
-            current_block.insert(name, Value::Block(HashMap::new()));
-            last_blocks.push(name);
-            continue;
-        }
-
-        //parse line in block
-        match parse_line(line) {
-            Ok((input, (name, line))) => {
-                if !input.is_empty() {
-                    return Err(SagError::invalid_char(line_n, line_len - input.len()));
-                }
-                if !last_blocks.is_empty() {
-                    let current_block = last_blocks.iter().fold(blocks.borrow_mut(), |b, k| {
-                        if let Value::Block(b) = b.get_mut(k).expect("Key must be present") {
-                            b
-                        } else {
-                            unreachable!()
-                        }
-                    });
-                    current_block.borrow_mut().insert(name, line);
-                }
-            }
-            Err(e) => {
-                match e {
-                    Err::Error(e) | Err::Failure(e) => {
-                        return Err(SagError::invalid_char(line_n, line_len - e.input.len()));
-                    }
-                    _ => unreachable!(),
-                };
-            }
-        };
-    }
-    // dbg!(&blocks);
-    Ok(blocks)
+    };
 }
+
+// pub type Block<'a> = HashMap<&'a str, Line<'a>>;
 
 pub fn parse_input(input: &str) -> Result<Config<'_>, SagError> {
     let blocks = match parse_lines(input) {
