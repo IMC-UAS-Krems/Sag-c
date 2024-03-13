@@ -267,7 +267,7 @@ impl<'a> Config<'a> {
     fn validate_datasources(config: &Config) -> Result<(), SagError> {
         for (panel_name, panel) in config.application.panels.iter() {
             if config.data.sources.get(panel.get_source()).is_none() {
-                return Err(SagError::parsing_error(
+                return Err(SagError::language_error(
                     panel_name,
                     Some("source"),
                     format!("invalid source: {}", panel.get_source()),
@@ -288,7 +288,7 @@ impl<'a> Service<'a> {
             .value;
 
         if !block.is_block() {
-            return Err(SagError::parsing_error(
+            return Err(SagError::language_error(
                 SECTION_NAME,
                 None,
                 "service section is not a block",
@@ -314,9 +314,9 @@ impl<'a> Service<'a> {
         Ok(Service {
             title,
             scope: Scope::from_str(scope)
-                .map_err(|e| SagError::parsing_error(SECTION_NAME, Some("scope"), e))?,
+                .map_err(|e| SagError::language_error(SECTION_NAME, Some("scope"), e))?,
             version: Version::from_str(version)
-                .map_err(|e| SagError::parsing_error(SECTION_NAME, Some("version"), e))?,
+                .map_err(|e| SagError::language_error(SECTION_NAME, Some("version"), e))?,
             test,
         })
     }
@@ -379,12 +379,12 @@ impl<'a> Datasource<'a> {
 
         Ok(Datasource {
             provider: Provider::from_str(provider)
-                .map_err(|e| SagError::parsing_error(source_name, Some("provider"), e))?,
+                .map_err(|e| SagError::language_error(source_name, Some("provider"), e))?,
             r#type: SourceType::from_str(r#type).map_err(|e| {
-                SagError::parsing_error(source_name, Some("type"), format!("invalid type: {}", e))
+                SagError::language_error(source_name, Some("type"), format!("invalid type: {}", e))
             })?,
             uri: Url::parse(uri).map_err(|e| {
-                SagError::parsing_error(source_name, Some("uri"), format!("invalid uri: {}", e))
+                SagError::language_error(source_name, Some("uri"), format!("invalid uri: {}", e))
             })?,
             query,
         })
@@ -428,7 +428,7 @@ impl<'a> Application<'a> {
             let panel_type = parse!(panel, &str, panel_name, "type");
 
             let panel_type = PanelType::from_str(panel_type)
-                .map_err(|e| SagError::parsing_error(panel_name, Some("type"), e))?;
+                .map_err(|e| SagError::language_error(panel_name, Some("type"), e))?;
 
             let panel_type_union = match panel_type {
                 PanelType::PieChart => PanelTypeUnion::PieChart(PieChart::new(blocks, panel_name)?),
@@ -460,9 +460,9 @@ impl<'a> Application<'a> {
 
         Ok(Application {
             r#type: ApplicationType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(SECTION_NAME, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(SECTION_NAME, Some("type"), e))?,
             layout: Layout::from_str(layout)
-                .map_err(|e| SagError::parsing_error(SECTION_NAME, Some("layout"), e))?,
+                .map_err(|e| SagError::language_error(SECTION_NAME, Some("layout"), e))?,
             roles: roles.to_owned(),
             panels: panels_map,
         })
@@ -491,7 +491,7 @@ impl<'a> GeoMap<'a> {
         Ok(GeoMap {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
             source,
             data,
             area,
@@ -517,7 +517,7 @@ impl<'a> GrafanaMap<'a> {
 
         Ok(GrafanaMap {
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
             source,
             traces,
         })
@@ -546,7 +546,7 @@ impl<'a> PieChart<'a> {
         let pie_chart_type = match pie_chart_type {
             Some(pie_chart_type) => Some(
                 PieChartType::from_str(pie_chart_type)
-                    .map_err(|e| SagError::parsing_error(block_name, Some("pie_chart_type"), e))?,
+                    .map_err(|e| SagError::language_error(block_name, Some("pie_chart_type"), e))?,
             ),
             None => None,
         };
@@ -554,7 +554,7 @@ impl<'a> PieChart<'a> {
         Ok(PieChart {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
             source,
             traces,
             pie_chart_type,
@@ -583,7 +583,7 @@ impl<'a> BarChart<'a> {
         Ok(BarChart {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
             source,
             traces,
         })
@@ -611,7 +611,7 @@ impl<'a> TimeSeries<'a> {
         Ok(TimeSeries {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
             source,
             traces,
         })
@@ -639,7 +639,7 @@ impl<'a> XYChart<'a> {
         Ok(XYChart {
             label,
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
             source,
             traces,
         })
@@ -664,7 +664,7 @@ impl<'a> GrafanaSingleLine<'a> {
 
         Ok(GrafanaSingleLine {
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
             source,
             traces,
         })
@@ -690,7 +690,7 @@ impl<'a> GrafanaMultiLine<'a> {
 
         Ok(GrafanaMultiLine {
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
             source,
             locations,
             traces,
@@ -717,7 +717,7 @@ impl<'a> GrafanaExtValues<'a> {
 
         Ok(GrafanaExtValues {
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
             source,
             locations,
             traces,
@@ -744,7 +744,7 @@ impl<'a> GrafanaCalendar<'a> {
 
         Ok(GrafanaCalendar {
             r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
             source,
             locations,
             traces,
@@ -800,14 +800,14 @@ impl<'a> Environment<'a> {
         let r#type = parse!(block, &str, block_name, "type");
 
         let port = port.parse::<i32>().map_err(|_| {
-            SagError::parsing_error(block_name, Some("port"), "port is not an integer")
+            SagError::language_error(block_name, Some("port"), "port is not an integer")
         })?;
 
         Ok(Environment {
             uri,
             port,
             r#type: EnvironmentType::from_str(r#type)
-                .map_err(|e| SagError::parsing_error(block_name, Some("type"), e))?,
+                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
         })
     }
 }

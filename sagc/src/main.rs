@@ -4,7 +4,7 @@ use actix_web::web::{self, Json};
 use actix_web::{get, post, App, HttpServer, Responder, Result};
 use rand::Rng;
 use sagc::dash::Dash;
-use sagc::errors::SagError;
+use sagc::errors::{SagError, WebErrorPosition};
 use sagc::grafana::Grafana;
 use sagc::parser::parse_input;
 use serde::Deserialize;
@@ -15,7 +15,7 @@ struct Input {
 }
 
 #[post("/grafana")]
-async fn grafana(input: web::Json<Input>) -> Result<impl Responder, SagError> {
+async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
     let result = parse_input(input.source.as_str());
 
     if let Ok(grafana) = result {
@@ -24,16 +24,21 @@ async fn grafana(input: web::Json<Input>) -> Result<impl Responder, SagError> {
         log::info!("Grafana app compiled successfully!");
         return Ok(Json(grafana));
     }
-    log::error!(
-        "Grafana app compilation failed with error: {}!",
-        result.as_ref().err().unwrap()
-    );
+    // log::error!(
+    //     "Grafana app compilation failed with error: {}!",
+    //     result.as_ref().err().unwrap()
+    // );
+    //
+    let error = WebErrorPosition {
+        status: "error".to_string(),
+        errors: result.err().unwrap(),
+    };
 
-    Err(result.err().unwrap())
+    Err(error)
 }
 
 #[post("/dash")]
-async fn dash(input: String) -> Result<impl Responder, SagError> {
+async fn dash(input: String) -> Result<impl Responder, WebErrorPosition> {
     let result = parse_input(input.as_str());
 
     if let Ok(dash) = result {
@@ -41,12 +46,17 @@ async fn dash(input: String) -> Result<impl Responder, SagError> {
         log::info!("Dash app compiled successfully!");
         return Ok(Json(dash));
     }
-    log::error!(
-        "Dash app compilation failed with error: {}!",
-        result.as_ref().err().unwrap()
-    );
+    // log::error!(
+    //     "Dash app compilation failed with error: {}!",
+    //     result.as_ref().err().unwrap()
+    // );
 
-    Err(result.err().unwrap())
+    let error = WebErrorPosition {
+        status: "error".to_string(),
+        errors: result.err().unwrap(),
+    };
+
+    Err(error)
 }
 
 #[get("/status")]

@@ -1,6 +1,6 @@
 use crate::{errors::SagError, sections::Config};
 use nom::bytes::complete::{tag, take_until, take_while};
-use nom::character::complete::{char, newline, space1};
+use nom::character::complete::space1;
 use nom::error::context;
 use nom::{
     branch::alt,
@@ -13,8 +13,8 @@ use nom_locate::LocatedSpan;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 
-pub type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;
-pub type IResultVec<'a> = nom::IResult<Span<'a>, Vec<Token<'a>>>;
+type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;
+type IResultVec<'a> = nom::IResult<Span<'a>, Vec<Token<'a>>>;
 type Span<'a> = LocatedSpan<&'a str>;
 const INDENT: usize = 4;
 pub type Blocks<'a> = HashMap<&'a str, ParseResult<'a>>;
@@ -28,7 +28,7 @@ pub struct Position {
 }
 
 #[derive(Debug)]
-enum TokenValue<'a> {
+pub enum TokenValue<'a> {
     Indent(usize),
     Block(&'a str),
     Section(&'a str),
@@ -37,7 +37,7 @@ enum TokenValue<'a> {
     Is,
     Arrow,
     IndentError,
-    UnparsbableError,
+    UnparsableError,
 }
 
 #[derive(Debug)]
@@ -53,7 +53,7 @@ pub struct ParseResult<'a> {
 }
 
 impl ParseResult<'_> {
-    fn new<'a>(position: Position, value: Value<'a>) -> ParseResult<'a> {
+    fn new(position: Position, value: Value<'_>) -> ParseResult<'_> {
         ParseResult { position, value }
     }
 }
@@ -226,7 +226,7 @@ fn parse_section_line(input: Span) -> IResultVec {
 
 fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     match error {
-        TokenValue::IndentError | TokenValue::UnparsbableError => (),
+        TokenValue::IndentError | TokenValue::UnparsableError => (),
         _ => unreachable!("No, no, no... Do not do this"),
     }
     let line = input.location_line() as usize;
@@ -291,7 +291,7 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
                 input = i;
                 tokens.push(token);
             }
-            Err(e) => {
+            Err(_) => {
                 let (i, token) = handle_error(input, TokenValue::IndentError).unwrap();
                 input = i;
                 errors.push(token);
@@ -312,8 +312,8 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
                 input = i;
                 tokens.extend(token);
             }
-            Err(e) => {
-                let (i, token) = handle_error(input, TokenValue::UnparsbableError).unwrap();
+            Err(_) => {
+                let (i, token) = handle_error(input, TokenValue::UnparsableError).unwrap();
                 input = i;
                 errors.push(token);
             }
@@ -405,23 +405,31 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
     blocks
 }
 
-pub fn parse_lines(input: &str) -> Result<Blocks, SagError> {
+pub fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
     let input = Span::new(input);
     let result = lexer(input);
     match result {
         Ok(tokens) => {
             let blocks = tokens_to_blocks(tokens);
-            return Ok(blocks);
+            Ok(blocks)
         }
         Err(errors) => {
-            return Err(SagError::error("Error parsing the input"));
+            let errors = errors
+                .iter()
+                .map(|e| match e.value {
+                    TokenValue::IndentError => SagError::invalid_indentation(e.position),
+                    TokenValue::UnparsableError => SagError::unparsable(e.position),
+                    _ => unreachable!(),
+                })
+                .collect();
+            Err(errors)
         }
-    };
+    }
 }
 
 // pub type Block<'a> = HashMap<&'a str, Line<'a>>;
 
-pub fn parse_input(input: &str) -> Result<Config<'_>, SagError> {
+pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
     let blocks = match parse_lines(input) {
         Ok(blocks) => blocks,
         Err(e) => {
@@ -431,7 +439,7 @@ pub fn parse_input(input: &str) -> Result<Config<'_>, SagError> {
     let config = match Config::new(&blocks) {
         Ok(config) => config,
         Err(e) => {
-            return Err(e);
+            return Err(vec![e]);
         }
     };
     Ok(config)
