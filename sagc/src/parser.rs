@@ -2,6 +2,7 @@ use crate::{errors::SagError, sections::Config};
 use nom::bytes::complete::{tag, take_until, take_while};
 use nom::character::complete::space1;
 use nom::error::context;
+use nom::sequence::delimited;
 use nom::{
     branch::alt,
     character::complete::{alpha1, alphanumeric1, space0},
@@ -49,7 +50,7 @@ struct Token<'a> {
 
 #[derive(Debug)]
 pub struct ParseResult<'a> {
-    pub position: Position,
+    pub position: Position, // NOTE: in case of a block, position is the position of the block name
     pub value: Value<'a>,
 }
 
@@ -91,13 +92,46 @@ pub enum Value<'a> {
     Block(HashMap<&'a str, ParseResult<'a>>),
 }
 
+fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
+    match error {
+        TokenValue::IndentError | TokenValue::UnparsableError => (),
+        _ => unreachable!("No, no, no... Do not do this"),
+    }
+
+    let line = input.location_line() as usize;
+    let col_start = input.get_column();
+
+    take_until("\n")(input).map(|(input, result)| {
+        let (input, _) = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(
+            |c| c == '\n',
+        )(input)
+        .unwrap();
+
+        let position = Position {
+            row_start: line,
+            row_end: line,
+            col_start,
+            col_end: col_start + result.len() - 1,
+        };
+        (
+            input,
+            Token {
+                position,
+                value: error,
+            },
+        )
+    })
+}
+
 fn parse_block_name(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
     terminated(alpha1, tag(":"))(input).map(|(input, result)| {
-        let (input, _) =
-            take_while::<_, nom_locate::LocatedSpan<&str>, ()>(|c| c == '\n')(input).unwrap();
+        let (input, _) = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(
+            |c| c == '\n',
+        )(input)
+        .unwrap();
 
         let position = Position {
             row_start: line,
@@ -188,7 +222,11 @@ fn parse_separator(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
-    alt((tag(" -> "), tag(" is ")))(input).map(|(input, result)| {
+    alt((
+        delimited(space1, tag("->"), space1),
+        delimited(space1, tag("is"), space1),
+    ))(input)
+    .map(|(input, result)| {
         let position = Position {
             row_start: line,
             row_end: line,
@@ -199,7 +237,7 @@ fn parse_separator(input: Span) -> IResult {
             input,
             Token {
                 position,
-                value: if *result.fragment() == " -> " {
+                value: if *result.fragment() == "->" {
                     TokenValue::Arrow
                 } else {
                     TokenValue::Is
@@ -226,38 +264,12 @@ fn parse_section_line(input: Span) -> IResultVec {
     to_return.push(result);
 
     let (input, _) =
-        take_while::<_, nom_locate::LocatedSpan<&str>, ()>(|c| c == '\n')(input).unwrap();
+        take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(|c| c == '\n')(
+            input,
+        )
+        .unwrap();
 
     Ok((input, to_return))
-}
-
-fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
-    match error {
-        TokenValue::IndentError | TokenValue::UnparsableError => (),
-        _ => unreachable!("No, no, no... Do not do this"),
-    }
-
-    let line = input.location_line() as usize;
-    let col_start = input.get_column();
-
-    take_until("\n")(input).map(|(input, result)| {
-        let (input, _) =
-            take_while::<_, nom_locate::LocatedSpan<&str>, ()>(|c| c == '\n')(input).unwrap();
-
-        let position = Position {
-            row_start: line,
-            row_end: line,
-            col_start,
-            col_end: col_start + result.len(),
-        };
-        (
-            input,
-            Token {
-                position,
-                value: error,
-            },
-        )
-    })
 }
 
 fn parse_indent(input: Span) -> IResult {
@@ -322,6 +334,11 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
             Ok((i, token)) => {
                 input = i;
                 tokens.extend(token);
+            }
+            Err(nom::Err::Error(e)) => {
+                let (i, token) = handle_error(e.input, TokenValue::UnparsableError).unwrap();
+                input = i;
+                errors.push(token);
             }
             Err(_) => {
                 let (i, token) = handle_error(input, TokenValue::UnparsableError).unwrap();
