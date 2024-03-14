@@ -1,5 +1,5 @@
 use crate::{errors::SagError, sections::Config};
-use nom::bytes::complete::{tag, take_until, take_while};
+use nom::bytes::complete::{tag, take_while};
 use nom::character::complete::space1;
 use nom::error::context;
 use nom::sequence::delimited;
@@ -103,7 +103,7 @@ fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
-    take_until("\n")(input).map(|(input, result)| {
+    take_while(|c| c != '\n')(input).map(|(input, result)| {
         let (input, _) = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(
             |c| c == '\n',
         )(input)
@@ -232,7 +232,7 @@ fn parse_value(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
-    take_until("\n")(input).map(|(input, result)| {
+    take_while(|c| c != '\n')(input).map(|(input, result)| {
         let position = Position {
             row_start: line,
             row_end: line,
@@ -459,7 +459,6 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
 fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
     let input = Span::new(input);
     let result = lexer(input);
-    dbg!(&result);
 
     match result {
         Ok(tokens) => {
