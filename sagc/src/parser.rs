@@ -93,7 +93,7 @@ impl<'a> TryInto<Vec<&'a str>> for &Value<'a> {
     }
 }
 
-/// Handle error in the lexer. Error is every from error location to the end of the line
+/// Handle error in the lexer. Error is everythig from error location to the end of the line
 fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     match error {
         TokenValue::IndentError | TokenValue::UnparsableError => (),
@@ -275,7 +275,6 @@ fn parse_section_line(input: Span) -> IResultVec {
 }
 
 fn parse_indent(input: Span) -> IResult {
-    // let (line, spaces) = take_till(|c| c != ' ')(line)?;
     let line = input.location_line();
     let column = input.get_column();
 
