@@ -60,6 +60,19 @@ impl ParseResult<'_> {
     }
 }
 
+#[derive(Debug)]
+pub enum Value<'a> {
+    String(&'a str),
+    Vec(Vec<&'a str>),
+    Block(HashMap<&'a str, ParseResult<'a>>),
+}
+
+impl<'a> Value<'a> {
+    pub fn is_block(&self) -> bool {
+        matches!(self, Value::Block(_))
+    }
+}
+
 impl<'a> TryInto<&'a str> for &Value<'a> {
     type Error = &'a str;
     fn try_into(self) -> Result<&'a str, Self::Error> {
@@ -80,18 +93,7 @@ impl<'a> TryInto<Vec<&'a str>> for &Value<'a> {
     }
 }
 
-impl<'a> Value<'a> {
-    pub fn is_block(&self) -> bool {
-        matches!(self, Value::Block(_))
-    }
-}
-#[derive(Debug)]
-pub enum Value<'a> {
-    String(&'a str),
-    Vec(Vec<&'a str>),
-    Block(HashMap<&'a str, ParseResult<'a>>),
-}
-
+/// Handle error in the lexer. Error is every from error location to the end of the line
 fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     match error {
         TokenValue::IndentError | TokenValue::UnparsableError => (),
@@ -170,6 +172,35 @@ fn parse_section_name(input: Span) -> IResult {
     })
 }
 
+fn parse_separator(input: Span) -> IResult {
+    let line = input.location_line() as usize;
+    let col_start = input.get_column();
+
+    alt((
+        delimited(space1, tag("->"), space1),
+        delimited(space1, tag("is"), space1),
+    ))(input)
+    .map(|(input, result)| {
+        let position = Position {
+            row_start: line,
+            row_end: line,
+            col_start,
+            col_end: col_start + result.len(),
+        };
+        (
+            input,
+            Token {
+                position,
+                value: if *result.fragment() == "->" {
+                    TokenValue::Arrow
+                } else {
+                    TokenValue::Is
+                },
+            },
+        )
+    })
+}
+
 fn parse_vec(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
@@ -213,35 +244,6 @@ fn parse_value(input: Span) -> IResult {
             Token {
                 position,
                 value: TokenValue::ValueStr(result.fragment().trim_end()),
-            },
-        )
-    })
-}
-
-fn parse_separator(input: Span) -> IResult {
-    let line = input.location_line() as usize;
-    let col_start = input.get_column();
-
-    alt((
-        delimited(space1, tag("->"), space1),
-        delimited(space1, tag("is"), space1),
-    ))(input)
-    .map(|(input, result)| {
-        let position = Position {
-            row_start: line,
-            row_end: line,
-            col_start,
-            col_end: col_start + result.len(),
-        };
-        (
-            input,
-            Token {
-                position,
-                value: if *result.fragment() == "->" {
-                    TokenValue::Arrow
-                } else {
-                    TokenValue::Is
-                },
             },
         )
     })
@@ -441,7 +443,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
     blocks
 }
 
-pub fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
+fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
     let input = Span::new(input);
     let result = lexer(input);
 

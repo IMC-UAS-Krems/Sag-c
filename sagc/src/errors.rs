@@ -12,6 +12,7 @@ pub enum SagError {
     Error(String),
 }
 
+// new
 #[derive(Serialize)]
 pub struct ParsingError {
     error: String,
@@ -40,6 +41,7 @@ struct WebError {
     error: String,
 }
 
+// new
 #[derive(Serialize, Debug)]
 pub struct WebErrorPosition {
     pub status: String,
@@ -67,6 +69,7 @@ impl SagError {
     }
 }
 
+// new
 impl ParsingError {
     fn unparsable(position: Position) -> Self {
         ParsingError {
@@ -131,6 +134,7 @@ impl core::fmt::Display for SagError {
     }
 }
 
+// new
 impl core::fmt::Display for ParsingError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(
@@ -158,6 +162,7 @@ impl core::fmt::Display for LanguageError {
     }
 }
 
+// new
 impl core::fmt::Display for WebErrorPosition {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{:?}", self)
@@ -193,6 +198,7 @@ impl Debug for LanguageError {
     }
 }
 
+// new
 impl Debug for ParsingError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(
@@ -225,6 +231,7 @@ impl error::ResponseError for SagError {
     }
 }
 
+// new
 impl error::ResponseError for WebErrorPosition {
     fn error_response(&self) -> actix_web::HttpResponse {
         actix_web::HttpResponse::Ok().json(Json(self))
