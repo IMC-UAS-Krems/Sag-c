@@ -11,7 +11,7 @@ use nom::{
     sequence::terminated,
 };
 use nom_locate::LocatedSpan;
-use std::borrow::BorrowMut;
+use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
 
 type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;
@@ -305,12 +305,19 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut input = input;
     let mut tokens = Vec::new();
     let mut errors = Vec::new();
+    let mut last_indent = 0;
+    let mut last_block_indent = 0;
     loop {
         let result = parse_indent(input);
+
         // if error, skip the line and continue
         match result {
             Ok((i, token)) => {
                 input = i;
+                last_indent = match token.value {
+                    TokenValue::Indent(indent) => indent,
+                    _ => unreachable!(),
+                };
                 tokens.push(token);
             }
             Err(_) => {
@@ -323,6 +330,7 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
         // if error, try to parse section line (like `alt` in nom)
         if let Ok((i, result)) = parse_block_name(input) {
             input = i;
+            last_block_indent = last_indent;
             tokens.push(result);
             if input.is_empty() {
                 break;
@@ -333,6 +341,12 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
         let result = parse_section_line(input);
         match result {
             Ok((i, token)) => {
+                if last_indent <= last_block_indent {
+                    let (i, token) = handle_error(input, TokenValue::IndentError).unwrap();
+                    input = i;
+                    errors.push(token);
+                    continue;
+                }
                 input = i;
                 tokens.extend(token);
             }
@@ -445,6 +459,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
 fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
     let input = Span::new(input);
     let result = lexer(input);
+    dbg!(&result);
 
     match result {
         Ok(tokens) => {
