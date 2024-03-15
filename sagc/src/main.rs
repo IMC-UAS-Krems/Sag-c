@@ -2,11 +2,12 @@ use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::web::{self, Json};
 use actix_web::{get, post, App, HttpServer, Responder, Result};
+use rand::seq::IteratorRandom;
 use rand::Rng;
 use sagc::dash::Dash;
 use sagc::errors::{SagError, WebErrorPosition};
 use sagc::grafana::Grafana;
-use sagc::parser::parse_input;
+use sagc::parser::{parse_input, Position};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -59,6 +60,40 @@ async fn dash(input: String) -> Result<impl Responder, WebErrorPosition> {
     Err(error)
 }
 
+#[post("/test")]
+async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
+    let input = input.source.as_str();
+    let lines = input.lines().collect::<Vec<&str>>();
+    let mut errors = Vec::new();
+    // select 5 random lines
+    let mut rng = rand::thread_rng();
+    let random_lines =
+        (0..lines.len()).choose_multiple(&mut rng, (lines.len().div_euclid(9)).max(2));
+    for i_line in random_lines {
+        let line = lines[i_line];
+        let line_len = line.len();
+        // select 2 random positions
+        let mut random_positions = (0..line_len).choose_multiple(&mut rng, 2);
+        random_positions.sort();
+        if random_positions.len() < 2 {
+            continue;
+        }
+
+        let position = Position {
+            row_start: i_line,
+            row_end: i_line,
+            col_start: *random_positions.get(0).unwrap(),
+            col_end: *random_positions.get(1).unwrap(),
+        };
+        errors.push(SagError::unparsable(position));
+    }
+    let errors = WebErrorPosition {
+        status: "error".to_string(),
+        errors,
+    };
+    Err(errors)
+}
+
 #[get("/status")]
 async fn status() -> impl Responder {
     const STATUSES: [&str; 5] = [
@@ -95,6 +130,7 @@ async fn main() -> std::io::Result<()> {
             .service(dash)
             .service(status)
             .service(index)
+            .service(test)
             .wrap(Logger::default())
     })
     .bind(("0.0.0.0", 8080))?
