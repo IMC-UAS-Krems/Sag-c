@@ -11,7 +11,7 @@ use nom::{
     sequence::terminated,
 };
 use nom_locate::LocatedSpan;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::BorrowMut;
 use std::collections::HashMap;
 
 type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;
@@ -103,11 +103,12 @@ fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
-    take_while(|c| c != '\n')(input).map(|(input, result)| {
-        let (input, _) = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(
-            |c| c == '\n',
-        )(input)
-        .unwrap();
+    take_while(|c| !(c == '\r' || c == '\n'))(input).map(|(input, result)| {
+        let (input, _) =
+            take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(|c| {
+                c == '\n' || c == '\r'
+            })(input)
+            .unwrap();
 
         let position = Position {
             row_start: line,
@@ -130,10 +131,11 @@ fn parse_block_name(input: Span) -> IResult {
     let col_start = input.get_column();
 
     terminated(alpha1, tag(":"))(input).map(|(input, result)| {
-        let (input, _) = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(
-            |c| c == '\n',
-        )(input)
-        .unwrap();
+        let (input, _) =
+            take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(|c| {
+                c == '\n' || c == '\r'
+            })(input)
+            .unwrap();
 
         let position = Position {
             row_start: line,
@@ -232,7 +234,7 @@ fn parse_value(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
-    take_while(|c| c != '\n')(input).map(|(input, result)| {
+    take_while(|c| !(c == '\r' || c == '\n'))(input).map(|(input, result)| {
         let position = Position {
             row_start: line,
             row_end: line,
@@ -265,11 +267,10 @@ fn parse_section_line(input: Span) -> IResultVec {
     };
     to_return.push(result);
 
-    let (input, _) =
-        take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(|c| c == '\n')(
-            input,
-        )
-        .unwrap();
+    let (input, _) = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(|c| {
+        c == '\r' || c == '\n'
+    })(input)
+    .unwrap();
 
     Ok((input, to_return))
 }
