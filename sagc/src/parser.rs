@@ -1,7 +1,8 @@
 use crate::{errors::SagError, sections::Config};
 use nom::bytes::complete::{tag, take_while};
-use nom::character::complete::space1;
+use nom::character::complete::{line_ending, space1};
 use nom::error::context;
+use nom::multi::many0;
 use nom::sequence::delimited;
 use nom::{
     branch::alt,
@@ -302,12 +303,23 @@ fn parse_indent(input: Span) -> IResult {
     })
 }
 
+fn seek_to_input(input: Span) -> Span {
+    let result = many0::<_, _, nom::error::Error<Span>, _>(alt((space1, line_ending)))(input);
+    match result {
+        Ok((input, _)) => input,
+        Err(_) => input,
+    }
+}
+
 fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut input = input;
     let mut tokens = Vec::new();
     let mut errors = Vec::new();
     let mut last_indent = 0;
     let mut last_block_indent = 0;
+
+    input = seek_to_input(input);
+
     loop {
         let result = parse_indent(input);
 
