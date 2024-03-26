@@ -31,26 +31,26 @@ Pie:
     label is pie
     type is pie_chart
     source is first
-    traces -> NOx, O3, NO2, SO2
+    traces -> NOx, O3, NO2, SO2, id
     pie_chart_type is pie
 
 XY:
     label is xy
     type is xy_chart
     source is first
-    traces -> dateObserved, NOx, O3, NO2, SO2
+    traces -> dateObserved, NOx, O3, NO2, SO2, id
 
 TS:
     label is ts
     type is timeseries
     source is first
-    traces -> dateObserved, NOx, O3, NO2, SO2
+    traces -> dateObserved, NOx, O3, NO2, SO2, id
 
 Bar:
     label is bar
     type is bar_chart
     source is first
-    traces -> dateObserved, NOx, O3, NO2, SO2
+    traces -> dateObserved, NOx, O3, NO2, SO2, id
 
 SCMapPanel:
     type is smartcomm-map-panel
