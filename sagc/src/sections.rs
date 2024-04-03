@@ -80,6 +80,12 @@ pub enum Provider {
 }
 
 #[derive(Debug)]
+pub enum DashboardType {
+    Grafana,
+    Dash,
+}
+
+#[derive(Debug)]
 pub enum SourceType {
     SmartMeter,
     Sensor,
@@ -88,6 +94,7 @@ pub enum SourceType {
 #[derive(Debug)]
 pub struct Application<'a> {
     pub r#type: ApplicationType,
+    pub dashboard: DashboardType,
     pub layout: Layout,
     pub roles: Vec<&'a str>,
     pub panels: HashMap<&'a str, PanelTypeUnion<'a>>, // called 'visualizations' for Dash, e.g. <name>: <visualization>
@@ -407,6 +414,7 @@ impl<'a> Application<'a> {
         }
 
         let r#type = parse!(block, &str, "application", "type");
+        let dashboard = parse!(block, &str, "application", "dashboard");
         let layout = parse!(block, &str, "application", "layout");
         let roles = parse!(block, Vec<&str>, "application", "roles");
         let panels = parse!(block, Vec<&str>, "application", "panels");
@@ -461,6 +469,8 @@ impl<'a> Application<'a> {
         Ok(Application {
             r#type: ApplicationType::from_str(r#type)
                 .map_err(|e| SagError::language_error(SECTION_NAME, Some("type"), e))?,
+            dashboard: DashboardType::from_str(dashboard)
+                .map_err(|e| SagError::language_error(SECTION_NAME, Some("dashboard"), e))?,
             layout: Layout::from_str(layout)
                 .map_err(|e| SagError::language_error(SECTION_NAME, Some("layout"), e))?,
             roles: roles.to_owned(),
@@ -965,6 +975,17 @@ impl FromStr for ApplicationType {
             "Desktop" => Ok(ApplicationType::Desktop),
             "Server" => Ok(ApplicationType::Server),
             _ => Err(format!("invalid application type: {}", s)),
+        }
+    }
+}
+
+impl FromStr for DashboardType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Grafana" => Ok(DashboardType::Grafana),
+            "Dash" => Ok(DashboardType::Dash),
+            _ => Err(format!("invalid dashboard type: {}", s)),
         }
     }
 }

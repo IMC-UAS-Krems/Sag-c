@@ -17,6 +17,7 @@ first:
 
 application:
     type is Web
+    dashboard is Grafana
     layout is SinglePage
     roles -> User, SuperUser, Admin
     panels -> Map, Pie, XY, TS, Bar, SCMapPanel, SingleLine, MultiLine, ExtremeValues, Calendar
