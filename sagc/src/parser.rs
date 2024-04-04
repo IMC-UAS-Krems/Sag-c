@@ -312,10 +312,12 @@ fn seek_to_input(input: Span) -> Span {
 }
 
 fn skip_whitespace(input: Span) -> Span {
-    let is_whitespace = |c: char| c.is_whitespace();
-    let (remaining, _) = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(is_whitespace)(input)
-        .unwrap_or((input, LocatedSpan::new("")));
-    remaining
+    let whitespace_followed_by_newline = tag::<_, _, nom::error::Error<Span>>("\n");
+
+    match whitespace_followed_by_newline(input) {
+        Ok((remaining, _)) => remaining,
+        Err(_) => input,
+    }
 }
 
 fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
@@ -328,6 +330,8 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     input = seek_to_input(input);
 
     loop {
+        input = skip_whitespace(input);
+
         let result = parse_indent(input);
 
         // if error, skip the line and continue
