@@ -311,6 +311,13 @@ fn seek_to_input(input: Span) -> Span {
     }
 }
 
+fn skip_whitespace(input: Span) -> Span {
+    let is_whitespace = |c: char| c.is_whitespace();
+    let (remaining, _) = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(is_whitespace)(input)
+        .unwrap_or((input, LocatedSpan::new("")));
+    remaining
+}
+
 fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut input = input;
     let mut tokens = Vec::new();
