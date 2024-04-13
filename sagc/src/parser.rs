@@ -311,14 +311,16 @@ fn seek_to_input(input: Span) -> Span {
     }
 }
 
-fn skip_whitespace(input: Span) -> Span {
-    let whitespace_followed_by_newline = tag::<_, _, nom::error::Error<Span>>("\n");
+fn parse_whitespace_line(input: Span) -> Span {
+    let result = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(|c|
+        {c == ' ' || c == '\t'})(input);
 
-    match whitespace_followed_by_newline(input) {
-        Ok((remaining, _)) => remaining,
+    match result {
+        Ok((input, _)) => input,
         Err(_) => input,
     }
 }
+
 
 fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut input = input;
@@ -330,7 +332,6 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     input = seek_to_input(input);
 
     loop {
-        input = skip_whitespace(input);
 
         let result = parse_indent(input);
 
@@ -345,12 +346,25 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
                 tokens.push(token);
             }
             Err(_) => {
-                let (i, token) = handle_error(input, TokenValue::IndentError).unwrap();
-                input = i;
-                errors.push(token);
-                continue;
+
+                //check if the line only consists of spaces or tabs
+                let mut white_parse = parse_whitespace_line(input);
+                match white_parse {
+                    //if yes continue as usual
+                    Ok((_,_)) => {
+                        continue;
+                    }
+                    //if not push an error
+                    Err(_) => {
+                        let (i, token) = handle_error(input, TokenValue::IndentError).unwrap();
+                        input = i;
+                        errors.push(token);
+                        continue;
+                    }
+                }   
             }
         }
+        
         // if error, try to parse section line (like `alt` in nom)
         if let Ok((i, result)) = parse_block_name(input) {
             input = i;
