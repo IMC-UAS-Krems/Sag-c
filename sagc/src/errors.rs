@@ -1,6 +1,6 @@
 use actix_web::{error, web::Json};
 use serde::Serialize;
-use std::fmt::Debug;
+use std::{fmt::Debug, usize};
 
 use crate::parser::Position;
 
@@ -9,7 +9,7 @@ use crate::parser::Position;
 pub enum SagError {
     LanguageError(LanguageError),
     ParsingError(ParsingError),
-    Error(String),
+    InternalError(String),
 }
 
 // new
@@ -24,21 +24,20 @@ pub struct ParsingError {
 
 #[derive(Serialize)]
 pub struct LanguageError {
-    error: LanguageErrorKind,
-    section: String,
-    field: Option<String>,
+    error: String,
+    line_start: usize,
+    column_start: usize,
+    line_end: usize,
+    column_end: usize,
 }
 
 #[derive(Debug, Serialize)]
-enum LanguageErrorKind {
+pub enum LanguageErrorKind {
+    InvalidType(),
     MissingField(String),
+    InvalidValue(String),
+    Generic(String),
     MissingSection(String),
-    Error(String),
-}
-
-#[derive(Serialize)]
-struct WebError {
-    error: String,
 }
 
 // new
@@ -48,24 +47,31 @@ pub struct WebErrorPosition {
     pub errors: Vec<SagError>,
 }
 
+impl ToString for LanguageErrorKind {
+    fn to_string(&self) -> String {
+        match self {
+            LanguageErrorKind::InvalidType() => "Invalid type".to_string(),
+            LanguageErrorKind::MissingField(field) => format!("Missing field '{}'", field),
+            LanguageErrorKind::InvalidValue(value) => format!("Invalid value '{}'", value),
+            LanguageErrorKind::Generic(error) => error.to_string(),
+            LanguageErrorKind::MissingSection(section) => format!("Missing section '{}'", section),
+        }
+    }
+}
+
 impl SagError {
-    pub fn language_error<T: ToString>(section: &str, field: Option<&str>, error: T) -> Self {
-        SagError::LanguageError(LanguageError::new(section, field, error))
-    }
-    pub fn missing_field(section: &str, field: &str) -> Self {
-        SagError::LanguageError(LanguageError::missing_field(section, field))
-    }
-    pub fn missing_section(section: &str) -> Self {
-        SagError::LanguageError(LanguageError::missing_section(section))
-    }
     pub fn unparsable(position: Position) -> Self {
         SagError::ParsingError(ParsingError::unparsable(position))
     }
     pub fn invalid_indentation(position: Position) -> Self {
         SagError::ParsingError(ParsingError::invalid_indentation(position))
     }
-    pub fn error<T: ToString>(error: T) -> Self {
-        SagError::Error(error.to_string())
+    pub fn language_error(error_kind: LanguageErrorKind, pos: Position) -> Self {
+        SagError::LanguageError(LanguageError::new(error_kind, pos))
+    }
+
+    pub fn internal_error(error: String) -> Self {
+        SagError::InternalError(error)
     }
 }
 
@@ -93,25 +99,13 @@ impl ParsingError {
 }
 
 impl LanguageError {
-    fn new<T: ToString>(section: &str, field: Option<&str>, error: T) -> Self {
+    fn new(error_kind: LanguageErrorKind, pos: Position) -> Self {
         LanguageError {
-            error: LanguageErrorKind::Error(error.to_string()),
-            section: section.to_string(),
-            field: field.map(|s| s.to_string()),
-        }
-    }
-    fn missing_field(section: &str, field: &str) -> Self {
-        LanguageError {
-            error: LanguageErrorKind::MissingField(field.to_string()),
-            section: section.to_string(),
-            field: Some(field.to_string()),
-        }
-    }
-    fn missing_section(section: &str) -> Self {
-        LanguageError {
-            error: LanguageErrorKind::MissingSection(section.to_string()),
-            section: section.to_string(),
-            field: None,
+            error: error_kind.to_string(),
+            line_start: pos.row_start,
+            column_start: pos.col_start,
+            line_end: pos.row_end,
+            column_end: pos.col_end,
         }
     }
 }
@@ -129,7 +123,7 @@ impl core::fmt::Display for SagError {
         match self {
             SagError::LanguageError(e) => write!(f, "{}", e),
             SagError::ParsingError(e) => write!(f, "{}", e),
-            SagError::Error(e) => write!(f, "{}", e),
+            SagError::InternalError(e) => write!(f, "{}", e),
         }
     }
 }
@@ -147,18 +141,11 @@ impl core::fmt::Display for ParsingError {
 
 impl core::fmt::Display for LanguageError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        match &self.error {
-            LanguageErrorKind::MissingField(field) => {
-                write!(f, "Missing field '{}' in section '{}'", field, self.section)
-            }
-            LanguageErrorKind::MissingSection(section) => {
-                write!(f, "Missing section '{}'", section)
-            }
-            LanguageErrorKind::Error(error) => match &self.field {
-                Some(field) => write!(f, "{}.{}: {}", self.section, field, error),
-                None => write!(f, "{}: {}", self.section, error),
-            },
-        }
+        write!(
+            f,
+            "({}:{} - {}:{}): {}",
+            self.line_start, self.column_start, self.line_end, self.column_end, self.error
+        )
     }
 }
 
@@ -176,58 +163,21 @@ impl Debug for SagError {
         match self {
             SagError::LanguageError(e) => write!(f, "{:?}", e),
             SagError::ParsingError(e) => write!(f, "{:?}", e),
-            SagError::Error(e) => write!(f, "{:?}", e),
+            SagError::InternalError(e) => write!(f, "{:?}", e),
         }
     }
 }
 
 impl Debug for LanguageError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        match &self.error {
-            LanguageErrorKind::MissingField(field) => {
-                write!(f, "Missing field {} in section {}", field, self.section)
-            }
-            LanguageErrorKind::MissingSection(section) => {
-                write!(f, "Missing section {}", section)
-            }
-            LanguageErrorKind::Error(error) => match &self.field {
-                Some(field) => write!(f, "{}.{}: {}", self.section, field, error),
-                None => write!(f, "{}: {}", self.section, error),
-            },
-        }
+        write!(f, "{}", self)
     }
 }
 
 // new
 impl Debug for ParsingError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(
-            f,
-            "({}:{} - {}:{}): {}",
-            self.line_start, self.column_start, self.line_end, self.column_end, self.error
-        )
-    }
-}
-
-// impl actix_web::error::ResponseError
-
-impl error::ResponseError for SagError {
-    fn error_response(&self) -> actix_web::HttpResponse {
-        match self {
-            SagError::LanguageError(e) => {
-                actix_web::HttpResponse::BadRequest().json(Json(WebError {
-                    error: e.to_string(),
-                }))
-            }
-            SagError::ParsingError(e) => {
-                actix_web::HttpResponse::BadRequest().json(Json(WebError {
-                    error: e.to_string(),
-                }))
-            }
-            SagError::Error(e) => actix_web::HttpResponse::BadRequest().json(Json(WebError {
-                error: e.to_string(),
-            })),
-        }
+        write!(f, "{}", self)
     }
 }
 

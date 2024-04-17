@@ -1,6 +1,7 @@
 use crate::sections::{
-    Application, BarChart, Config, Datasource, Deployment, Environment, GeoMap, PanelTypeUnion,
-    PieChart, Service, TimeSeries, Version, XYChart, GrafanaMap, GrafanaSingleLine, GrafanaMultiLine, GrafanaExtValues, GrafanaCalendar
+    Application, BarChart, Config, Datasource, Deployment, Environment, GeoMap, GrafanaCalendar,
+    GrafanaExtValues, GrafanaMap, GrafanaMultiLine, GrafanaSingleLine, PanelTypeUnion, PieChart,
+    Service, TimeSeries, Version, XYChart,
 };
 
 use serde::{de::value, Serialize};
@@ -87,7 +88,7 @@ struct GrafanaXYChart {
 
 #[derive(Debug, Serialize)]
 struct GrafanaPluginGMap {
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     chart_type: String,
     source: String,
     traces: Vec<String>,
@@ -95,7 +96,7 @@ struct GrafanaPluginGMap {
 
 #[derive(Debug, Serialize)]
 struct SingleLine {
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     chart_type: String,
     source: String,
     traces: Vec<String>,
@@ -103,17 +104,16 @@ struct SingleLine {
 
 #[derive(Debug, Serialize)]
 struct MultiLine {
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     chart_type: String,
     source: String,
     traces: Vec<String>,
     locations: Vec<String>,
-
 }
 
 #[derive(Debug, Serialize)]
 struct Calendar {
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     chart_type: String,
     source: String,
     traces: Vec<String>,
@@ -122,7 +122,7 @@ struct Calendar {
 
 #[derive(Debug, Serialize)]
 struct ExtValues {
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     chart_type: String,
     source: String,
     traces: Vec<String>,
@@ -142,15 +142,15 @@ enum GrafanaPanel {
     GeoMap(GrafanaGeoMap),
     #[serde(rename = "xy_chart")]
     XYChart(GrafanaXYChart),
-    #[serde(rename="smartcomm-map-panel")]
+    #[serde(rename = "smartcomm-map-panel")]
     GrafanaMap(GrafanaPluginGMap),
-    #[serde(rename="smartcomm-simpleline-panel")]
+    #[serde(rename = "smartcomm-simpleline-panel")]
     GrafanaSingleLine(SingleLine),
-    #[serde(rename="smartcomm-multiplelinechart-panel")]
+    #[serde(rename = "smartcomm-multiplelinechart-panel")]
     GrafanaMultiLine(MultiLine),
-    #[serde(rename="smartcomm-extremevalues-panel")]
+    #[serde(rename = "smartcomm-extremevalues-panel")]
     GrafanaExtValues(ExtValues),
-    #[serde(rename="smartcomm-calendar-panel")]
+    #[serde(rename = "smartcomm-calendar-panel")]
     GrafanaCalendar(Calendar),
     NotSupported,
 }
@@ -259,9 +259,9 @@ impl<'a> From<XYChart<'a>> for GrafanaXYChart {
     }
 }
 
-impl <'a> From<GrafanaMap<'a>> for GrafanaPluginGMap {
+impl<'a> From<GrafanaMap<'a>> for GrafanaPluginGMap {
     fn from(value: GrafanaMap<'a>) -> Self {
-        GrafanaPluginGMap{
+        GrafanaPluginGMap {
             chart_type: value.r#type.to_string(),
             source: value.source.to_string(),
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
@@ -269,9 +269,9 @@ impl <'a> From<GrafanaMap<'a>> for GrafanaPluginGMap {
     }
 }
 
-impl <'a> From<GrafanaSingleLine<'a>> for SingleLine {
+impl<'a> From<GrafanaSingleLine<'a>> for SingleLine {
     fn from(value: GrafanaSingleLine<'a>) -> Self {
-        SingleLine{
+        SingleLine {
             chart_type: value.r#type.to_string(),
             source: value.source.to_string(),
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
@@ -279,7 +279,7 @@ impl <'a> From<GrafanaSingleLine<'a>> for SingleLine {
     }
 }
 
-impl <'a> From<GrafanaMultiLine<'a>> for MultiLine {
+impl<'a> From<GrafanaMultiLine<'a>> for MultiLine {
     fn from(value: GrafanaMultiLine<'a>) -> Self {
         MultiLine {
             chart_type: value.r#type.to_string(),
@@ -290,7 +290,7 @@ impl <'a> From<GrafanaMultiLine<'a>> for MultiLine {
     }
 }
 
-impl <'a> From<GrafanaExtValues<'a>> for ExtValues {
+impl<'a> From<GrafanaExtValues<'a>> for ExtValues {
     fn from(value: GrafanaExtValues<'a>) -> Self {
         ExtValues {
             chart_type: value.r#type.to_string(),
@@ -301,7 +301,7 @@ impl <'a> From<GrafanaExtValues<'a>> for ExtValues {
     }
 }
 
-impl <'a> From<GrafanaCalendar<'a>> for Calendar {
+impl<'a> From<GrafanaCalendar<'a>> for Calendar {
     fn from(value: GrafanaCalendar<'a>) -> Self {
         Calendar {
             chart_type: value.r#type.to_string(),
@@ -335,10 +335,18 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         PanelTypeUnion::GeoMap(geo_map) => GrafanaPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => GrafanaPanel::XYChart(xy_chart.into()),
                         PanelTypeUnion::GrafanaMap(_) => GrafanaPanel::NotSupported,
-                        PanelTypeUnion::GrafanaSingleLine(g_sline) => GrafanaPanel::GrafanaSingleLine(g_sline.into()),
-                        PanelTypeUnion::GrafanaMultiLine(g_mline) => GrafanaPanel::GrafanaMultiLine(g_mline.into()),
-                        PanelTypeUnion::GrafanaExtValues(g_ext) => GrafanaPanel::GrafanaExtValues(g_ext.into()),
-                        PanelTypeUnion::GrafanaCalendar(g_calendar) => GrafanaPanel::GrafanaCalendar(g_calendar.into()),
+                        PanelTypeUnion::GrafanaSingleLine(g_sline) => {
+                            GrafanaPanel::GrafanaSingleLine(g_sline.into())
+                        }
+                        PanelTypeUnion::GrafanaMultiLine(g_mline) => {
+                            GrafanaPanel::GrafanaMultiLine(g_mline.into())
+                        }
+                        PanelTypeUnion::GrafanaExtValues(g_ext) => {
+                            GrafanaPanel::GrafanaExtValues(g_ext.into())
+                        }
+                        PanelTypeUnion::GrafanaCalendar(g_calendar) => {
+                            GrafanaPanel::GrafanaCalendar(g_calendar.into())
+                        }
                     };
                     (name.to_string(), grafana_panel)
                 })
@@ -356,8 +364,8 @@ impl<'a> From<Deployment<'a>> for GrafanaDeployment {
         GrafanaDeployment {
             environments: value
                 .environments
-                .iter()
-                .map(|(name, environment)| (name.to_string(), (*environment).into()))
+                .into_iter()
+                .map(|(name, environment)| (name.to_string(), environment.into()))
                 .collect(),
         }
     }

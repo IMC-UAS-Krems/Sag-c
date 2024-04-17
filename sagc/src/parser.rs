@@ -500,10 +500,16 @@ pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
         }
     };
 
-    let config = match Config::new(&blocks) {
+    let config = match Config::new(blocks) {
         Ok(config) => config,
         Err(e) => {
-            return Err(vec![e]);
+            return Err(e
+                .into_iter()
+                .filter(|e| match e {
+                    SagError::LanguageError(_e) => true,
+                    _ => false,
+                })
+                .collect());
         }
     };
 

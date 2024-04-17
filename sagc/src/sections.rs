@@ -6,9 +6,11 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use url::Url;
 
+use crate::errors::LanguageErrorKind;
 use crate::errors::SagError;
 use crate::parse;
 use crate::parser::Blocks;
+use crate::parser::Position;
 use crate::parser::Value;
 
 #[derive(Debug)]
@@ -25,7 +27,6 @@ pub struct Service<'a> {
     pub title: &'a str, // called "name" for Dash, can be 'name' also in this case
     pub scope: Scope,
     pub version: Version,
-    pub test: Option<Test<'a>>,
 }
 
 #[derive(Debug)]
@@ -227,130 +228,239 @@ pub struct Deployment<'a> {
     pub environments: HashMap<&'a str, Environment<'a>>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub struct Environment<'a> {
     pub uri: &'a str,
     pub port: i32,
     pub r#type: EnvironmentType,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 pub enum EnvironmentType {
     Docker,
 }
 
 impl<'a> Config<'a> {
-    pub fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
-        let service: Service = Service::new(blocks)?;
+    pub fn new(blocks: Blocks<'a>) -> Result<Self, Vec<SagError>> {
+        let mut errors = Vec::new();
 
-        let data = SagData::new(blocks)?;
-        let application: Application = Application::new(blocks)?;
-        let deployment: Deployment = Deployment::new(blocks)?;
+        let application = Application::new(&blocks);
+        let service = Service::new(&blocks);
+        let data = SagData::new(&blocks);
+        let deployment = Deployment::new(&blocks);
 
-        let config = Config {
-            service,
-            data,
-            application,
-            deployment,
+        let service = match service {
+            Ok(service) => Some(service),
+            Err(e) => {
+                errors.extend(e.into_iter());
+                None
+            }
+        };
+        let data = match data {
+            Ok(data) => Some(data),
+            Err(e) => {
+                errors.extend(e.into_iter());
+                None
+            }
         };
 
-        Config::validate(&config)?;
+        let application = match application {
+            Ok(application) => Some(application),
+            Err(e) => {
+                errors.extend(e.into_iter());
+                None
+            }
+        };
+
+        let deployment = match deployment {
+            Ok(deployment) => Some(deployment),
+            Err(e) => {
+                errors.extend(e.into_iter());
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        let config = Config {
+            service: service.unwrap(),
+            data: data.unwrap(),
+            application: application.unwrap(),
+            deployment: deployment.unwrap(),
+        };
+
+        //Config::validate(&config)?;
         Ok(config)
     }
 
-    fn validate(config: &Config) -> Result<(), SagError> {
-        Config::validate_datasources(config)?;
-        Ok(())
-    }
+    //fn validate(config: &Config) -> Result<(), Vec<SagError>> {
+    //    Config::validate_datasources(config)?;
+    //    Ok(())
+    //}
 
-    /// Validate that all datasources referenced in the application panels are defined
-    fn validate_datasources(config: &Config) -> Result<(), SagError> {
-        for (panel_name, panel) in config.application.panels.iter() {
-            if config.data.sources.get(panel.get_source()).is_none() {
-                return Err(SagError::language_error(
-                    panel_name,
-                    Some("source"),
-                    format!("invalid source: {}", panel.get_source()),
-                ));
-            }
-        }
-        Ok(())
-    }
+    // Validate that all datasources referenced in the application panels are defined
+    //fn validate_datasources(config: &Config) -> Result<(), Vec<SagError>> {
+    //    let mut errors = Vec::new();
+    //    for (panel_name, panel) in config.application.panels.iter() {
+    //        if config.data.sources.get(panel.get_source()).is_none() {
+    //            return Err(SagError::language_error(
+    //                panel_name,
+    //                Some("source"),
+    //                format!("invalid source: {}", panel.get_source()),
+    //            ));
+    //        }
+    //    }
+    //    Ok(())
+    //}
 }
 
 impl<'a> Service<'a> {
-    fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
+    fn check(blocks: &Blocks<'a>) -> Result<(&'a str, Scope, Version), Vec<SagError>> {
         const SECTION_NAME: &str = "service";
+        let mut errors = Vec::new();
 
-        let block = &blocks
+        let block = blocks
             .get(SECTION_NAME)
-            .ok_or(SagError::missing_section(SECTION_NAME))?
-            .value;
+            .ok_or(SagError::internal_error(format!(
+                "Missing section {}",
+                SECTION_NAME
+            )));
 
-        if !block.is_block() {
-            return Err(SagError::language_error(
-                SECTION_NAME,
-                None,
-                "service section is not a block",
+        if let Err(e) = block {
+            errors.push(e);
+            return Err(errors);
+        }
+
+        let block = block.unwrap();
+
+        if !block.value.is_block() {
+            errors.push(SagError::language_error(
+                LanguageErrorKind::InvalidType(),
+                block.position,
             ));
+            return Err(errors);
         }
 
         let title = parse!(block, &str, SECTION_NAME, "title");
         let scope = parse!(block, &str, SECTION_NAME, "scope");
         let version = parse!(block, &str, SECTION_NAME, "version");
 
-        let test = match block {
-            Value::Block(block) => match block.get("test") {
-                Some(value) => Some(Test::new(&value.value)?),
-                None => None,
-            },
-            _ => {
-                return Err(SagError::error(format!(
-                    "{SECTION_NAME} section is not a block"
-                )))
+        let title: Option<&str> = match title {
+            Ok((title, _)) => Some(title),
+            Err(e) => {
+                errors.push(e);
+                None
             }
         };
 
+        let scope: Option<Scope> = match scope {
+            Ok((scope, scope_pos)) => Scope::from_str(scope)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(scope.to_string()),
+                        scope_pos,
+                    ));
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let version: Option<Version> = match version {
+            Ok((version, version_pos)) => Version::from_str(version)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(version.to_string()),
+                        version_pos,
+                    ));
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((title.unwrap(), scope.unwrap(), version.unwrap()))
+    }
+
+    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+        let (title, scope, version) = Service::check(blocks)?;
+
         Ok(Service {
             title,
-            scope: Scope::from_str(scope)
-                .map_err(|e| SagError::language_error(SECTION_NAME, Some("scope"), e))?,
-            version: Version::from_str(version)
-                .map_err(|e| SagError::language_error(SECTION_NAME, Some("version"), e))?,
-            test,
+            scope,
+            version,
         })
     }
 }
 
-impl<'a> Test<'a> {
-    fn new(block: &Value<'a>) -> Result<Self, SagError> {
-        let one = parse!(block, &str, "service.test", "one");
-        let two = parse!(block, &str, "service.test", "two");
-
-        Ok(Test { one, two })
-    }
-}
-
 impl<'a> SagData<'a> {
-    fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
+    fn check(blocks: &Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
         const SECTION_NAME: &str = "data";
+        let mut errors = Vec::new();
 
-        let data = &blocks
+        let data = blocks
             .get(SECTION_NAME)
-            .ok_or(SagError::missing_section(SECTION_NAME))?
-            .value;
-
-        let mut data_sources_map: HashMap<&str, Datasource> = HashMap::new();
-
-        if !data.is_block() {
-            return Err(SagError::error(format!(
-                "{SECTION_NAME} section is not a block"
+            .ok_or(SagError::internal_error(format!(
+                "Missing section {}",
+                SECTION_NAME
             )));
+
+        if let Err(e) = data {
+            errors.push(e);
+            return Err(errors);
+        }
+
+        let data = data.unwrap();
+
+        if !data.value.is_block() {
+            errors.push(SagError::language_error(
+                LanguageErrorKind::InvalidType(),
+                data.position,
+            ));
+            return Err(errors);
         }
 
         let data_sources = parse!(data, Vec<&str>, SECTION_NAME, "sources");
-        for name in data_sources {
-            data_sources_map.insert(name, Datasource::new(blocks, name)?);
+        if let Err(e) = data_sources {
+            errors.push(e);
+            return Err(errors);
+        }
+
+        let data_sources = data_sources.unwrap();
+
+        return Ok(data_sources);
+    }
+
+    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+        const SECTION_NAME: &str = "data";
+
+        let mut errors = Vec::new();
+
+        let data_sources = SagData::check(blocks)?;
+
+        let mut data_sources_map = HashMap::new();
+
+        for name in data_sources.0 {
+            let datasource = Datasource::new(blocks, name, data_sources.1);
+            if let Err(e) = datasource {
+                errors.extend(e.into_iter());
+            } else {
+                data_sources_map.insert(name, datasource.unwrap());
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err(errors);
         }
 
         Ok(SagData {
@@ -360,138 +470,399 @@ impl<'a> SagData<'a> {
 }
 
 impl<'a> Datasource<'a> {
-    fn new(blocks: &Blocks<'a>, source_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(source_name)
-            .ok_or(SagError::missing_section(source_name))?
-            .value;
+    fn check(
+        blocks: &Blocks<'a>,
+        source_name: &'a str,
+        source_name_position: Position,
+    ) -> Result<(Provider, SourceType, Url, &'a str), Vec<SagError>> {
+        let mut errors = Vec::new();
 
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{source_name} section is not a block"
-            )));
+        let datasource = blocks.get(source_name).ok_or(SagError::language_error(
+            LanguageErrorKind::MissingSection(source_name.to_string()),
+            source_name_position,
+        ));
+
+        if let Err(e) = datasource {
+            errors.push(e);
+            return Err(errors);
         }
 
-        let provider = parse!(block, &str, source_name, "provider");
-        let r#type = parse!(block, &str, source_name, "type");
-        let uri = parse!(block, &str, source_name, "uri");
-        let query = parse!(block, &str, source_name, "query");
+        let datasource = datasource.unwrap();
+
+        if !datasource.value.is_block() {
+            errors.push(SagError::language_error(
+                LanguageErrorKind::InvalidType(),
+                datasource.position,
+            ));
+            return Err(errors);
+        }
+
+        let provider = parse!(datasource, &str, source_name, "provider");
+        let r#type = parse!(datasource, &str, source_name, "type");
+        let uri = parse!(datasource, &str, source_name, "uri");
+        let query = parse!(datasource, &str, source_name, "query");
+
+        let provider: Option<Provider> = match provider {
+            Ok((provider, provider_pos)) => Provider::from_str(provider)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(provider.to_string()),
+                        provider_pos,
+                    ));
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let r#type: Option<SourceType> = match r#type {
+            Ok((r#type, r#type_pos)) => SourceType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ));
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let uri: Option<Url> = match uri {
+            Ok((uri, uri_pos)) => Url::parse(uri)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(uri.to_string()),
+                        uri_pos,
+                    ));
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let query: Option<&str> = match query {
+            Ok((query, _)) => Some(query),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            provider.unwrap(),
+            r#type.unwrap(),
+            uri.unwrap(),
+            query.unwrap(),
+        ))
+    }
+
+    fn new(
+        blocks: &Blocks<'a>,
+        source_name: &'a str,
+        source_name_position: Position,
+    ) -> Result<Self, Vec<SagError>> {
+        let (provider, r#type, uri, query) =
+            Datasource::check(blocks, source_name, source_name_position)?;
 
         Ok(Datasource {
-            provider: Provider::from_str(provider)
-                .map_err(|e| SagError::language_error(source_name, Some("provider"), e))?,
-            r#type: SourceType::from_str(r#type).map_err(|e| {
-                SagError::language_error(source_name, Some("type"), format!("invalid type: {}", e))
-            })?,
-            uri: Url::parse(uri).map_err(|e| {
-                SagError::language_error(source_name, Some("uri"), format!("invalid uri: {}", e))
-            })?,
+            provider,
+            r#type,
+            uri,
             query,
         })
     }
 }
 
 impl<'a> Application<'a> {
-    fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
+    fn check(
+        blocks: &Blocks<'a>,
+    ) -> Result<
+        (
+            ApplicationType,
+            Layout,
+            Vec<&'a str>,
+            (Vec<&'a str>, Position),
+        ),
+        Vec<SagError>,
+    > {
         const SECTION_NAME: &str = "application";
+        let mut errors = Vec::new();
 
-        let block = &blocks
+        let block = blocks
             .get(SECTION_NAME)
-            .ok_or(SagError::missing_section(SECTION_NAME))?
-            .value;
-
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{SECTION_NAME} section is not a block"
+            .ok_or(SagError::internal_error(format!(
+                "Missing section {}",
+                SECTION_NAME
             )));
+
+        if let Err(e) = block {
+            errors.push(e);
+            return Err(errors);
+        }
+        let block = block.unwrap();
+
+        if !block.value.is_block() {
+            errors.push(SagError::language_error(
+                LanguageErrorKind::InvalidType(),
+                block.position,
+            ));
+            return Err(errors);
+        }
+        let r#type = parse!(block, &str, SECTION_NAME, "type");
+        let layout = parse!(block, &str, SECTION_NAME, "layout");
+        let roles = parse!(block, Vec<&str>, SECTION_NAME, "roles");
+        let panels = parse!(block, Vec<&str>, SECTION_NAME, "panels");
+
+        let r#type: Option<ApplicationType> = match r#type {
+            Ok((r#type, r#type_pos)) => ApplicationType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ));
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let layout: Option<Layout> = match layout {
+            Ok((layout, layout_pos)) => Layout::from_str(layout)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(layout.to_string()),
+                        layout_pos,
+                    ));
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let roles: Option<Vec<&str>> = match roles {
+            Ok((roles, _)) => Some(roles),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let panels: Option<(Vec<&str>, Position)> = match panels {
+            Ok((panels, pos)) => Some((panels, pos)),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
         }
 
-        let r#type = parse!(block, &str, "application", "type");
-        let layout = parse!(block, &str, "application", "layout");
-        let roles = parse!(block, Vec<&str>, "application", "roles");
-        let panels = parse!(block, Vec<&str>, "application", "panels");
+        Ok((
+            r#type.unwrap(),
+            layout.unwrap(),
+            roles.unwrap(),
+            panels.unwrap(),
+        ))
+    }
+
+    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+        let (r#type, layout, roles, panels) = Application::check(blocks)?;
+        let mut errors = Vec::new();
 
         let mut panels_map = HashMap::new();
 
-        for panel_name in panels {
-            let panel = &blocks
-                .get(panel_name)
-                .ok_or(SagError::missing_section(panel_name))?
-                .value;
-
-            if !panel.is_block() {
-                return Err(SagError::error(format!(
-                    "{panel_name} section is not a block"
-                )));
+        for panel_name in panels.0 {
+            let panel = PanelTypeUnion::new(blocks, panel_name, panels.1);
+            if let Err(e) = panel {
+                errors.extend(e.into_iter());
+            } else {
+                panels_map.insert(panel_name, panel.unwrap());
             }
+        }
 
-            let panel_type = parse!(panel, &str, panel_name, "type");
-
-            let panel_type = PanelType::from_str(panel_type)
-                .map_err(|e| SagError::language_error(panel_name, Some("type"), e))?;
-
-            let panel_type_union = match panel_type {
-                PanelType::PieChart => PanelTypeUnion::PieChart(PieChart::new(blocks, panel_name)?),
-                PanelType::TimeSeries => {
-                    PanelTypeUnion::TimeSeries(TimeSeries::new(blocks, panel_name)?)
-                }
-                PanelType::BarChart => PanelTypeUnion::BarChart(BarChart::new(blocks, panel_name)?),
-                PanelType::GeoMap => PanelTypeUnion::GeoMap(GeoMap::new(blocks, panel_name)?),
-                PanelType::XYChart => PanelTypeUnion::XYChart(XYChart::new(blocks, panel_name)?),
-                PanelType::GrafanaMap => {
-                    PanelTypeUnion::GrafanaMap(GrafanaMap::new(blocks, panel_name)?)
-                }
-                PanelType::GrafanaSingleLine => {
-                    PanelTypeUnion::GrafanaSingleLine(GrafanaSingleLine::new(blocks, panel_name)?)
-                }
-                PanelType::GrafanaMultiLine => {
-                    PanelTypeUnion::GrafanaMultiLine(GrafanaMultiLine::new(blocks, panel_name)?)
-                }
-                PanelType::GrafanaExtValues => {
-                    PanelTypeUnion::GrafanaExtValues(GrafanaExtValues::new(blocks, panel_name)?)
-                }
-                PanelType::GrafanaCalendar => {
-                    PanelTypeUnion::GrafanaCalendar(GrafanaCalendar::new(blocks, panel_name)?)
-                }
-            };
-
-            panels_map.insert(panel_name, panel_type_union);
+        if !errors.is_empty() {
+            return Err(errors);
         }
 
         Ok(Application {
-            r#type: ApplicationType::from_str(r#type)
-                .map_err(|e| SagError::language_error(SECTION_NAME, Some("type"), e))?,
-            layout: Layout::from_str(layout)
-                .map_err(|e| SagError::language_error(SECTION_NAME, Some("layout"), e))?,
-            roles: roles.to_owned(),
+            r#type,
+            layout,
+            roles,
             panels: panels_map,
         })
     }
 }
 
-impl<'a> GeoMap<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
+impl<'a> PanelTypeUnion<'a> {
+    fn check(
+        blocks: &'a Blocks<'a>,
+        block_name: &'a str,
+        block_ref_position: Position,
+    ) -> Result<PanelType, Vec<SagError>> {
+        let mut errors = Vec::new();
 
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
+        let block = blocks.get(block_name).ok_or(SagError::language_error(
+            LanguageErrorKind::MissingSection(block_name.to_string()),
+            block_ref_position,
+        ));
+
+        if let Err(e) = block {
+            errors.push(e);
+            return Err(errors);
         }
 
+        let block = block.unwrap();
+
+        if !block.value.is_block() {
+            errors.push(SagError::language_error(
+                LanguageErrorKind::InvalidType(),
+                block.position,
+            ));
+            return Err(errors);
+        }
+        let panel_type = parse!(block, &str, block_name, "type");
+        if let Err(e) = panel_type {
+            errors.push(e);
+            return Err(errors);
+        }
+        let panel_type = panel_type.unwrap();
+        let panel_type = PanelType::from_str(panel_type.0).map_err(|_| {
+            SagError::language_error(
+                LanguageErrorKind::InvalidValue(panel_type.0.to_string()),
+                panel_type.1,
+            )
+        });
+        if let Err(e) = panel_type {
+            errors.push(e);
+            return Err(errors);
+        }
+        Ok(panel_type.unwrap())
+    }
+
+    fn new(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+        block_ref_position: Position,
+    ) -> Result<Self, Vec<SagError>> {
+        let panel_type = PanelTypeUnion::check(blocks, block_name, block_ref_position)?;
+
+        let panel_type_union = match panel_type {
+            PanelType::PieChart => PanelTypeUnion::PieChart(PieChart::new(blocks, block_name)?),
+            PanelType::TimeSeries => {
+                PanelTypeUnion::TimeSeries(TimeSeries::new(blocks, block_name)?)
+            }
+            PanelType::BarChart => PanelTypeUnion::BarChart(BarChart::new(blocks, block_name)?),
+            PanelType::GeoMap => PanelTypeUnion::GeoMap(GeoMap::new(blocks, block_name)?),
+            PanelType::XYChart => PanelTypeUnion::XYChart(XYChart::new(blocks, block_name)?),
+            PanelType::GrafanaMap => {
+                PanelTypeUnion::GrafanaMap(GrafanaMap::new(blocks, block_name)?)
+            }
+            PanelType::GrafanaSingleLine => {
+                PanelTypeUnion::GrafanaSingleLine(GrafanaSingleLine::new(blocks, block_name)?)
+            }
+            PanelType::GrafanaMultiLine => {
+                PanelTypeUnion::GrafanaMultiLine(GrafanaMultiLine::new(blocks, block_name)?)
+            }
+            PanelType::GrafanaExtValues => {
+                PanelTypeUnion::GrafanaExtValues(GrafanaExtValues::new(blocks, block_name)?)
+            }
+            PanelType::GrafanaCalendar => {
+                PanelTypeUnion::GrafanaCalendar(GrafanaCalendar::new(blocks, block_name)?)
+            }
+        };
+        Ok(panel_type_union)
+    }
+}
+
+impl<'a> GeoMap<'a> {
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+
+        let block = blocks.get(block_name).unwrap();
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let data = parse!(block, Vec<&str>, block_name, "data");
         let area = parse!(block, Option<&str>, block_name, "label");
 
+        let label = match label {
+            Ok((label, _)) => Some(label),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let data = match data {
+            Ok((data, _)) => Some(data),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let area = match area {
+            Some((a, _)) => Some(a),
+            None => None,
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            label.unwrap(),
+            r#type.unwrap(),
+            source.unwrap(),
+            data.unwrap(),
+            area,
+        ))
+    }
+
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        let (label, r#type, source, data, area) = GeoMap::check(blocks, block_name)?;
+
         Ok(GeoMap {
             label,
-            r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
+            r#type,
             source,
             data,
             area,
@@ -500,24 +871,60 @@ impl<'a> GeoMap<'a> {
 }
 
 impl<'a> GrafanaMap<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+        let block = blocks.get(block_name).unwrap();
 
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
-        }
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((r#type.unwrap(), source.unwrap(), traces.unwrap()))
+    }
+
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        let (r#type, source, traces) = GrafanaMap::check(blocks, block_name)?;
+
         Ok(GrafanaMap {
-            r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
+            r#type,
             source,
             traces,
         })
@@ -525,17 +932,21 @@ impl<'a> GrafanaMap<'a> {
 }
 
 impl<'a> PieChart<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
-
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
-        }
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<
+        (
+            &'a str,
+            PanelType,
+            &'a str,
+            Vec<&'a str>,
+            Option<PieChartType>,
+        ),
+        Vec<SagError>,
+    > {
+        let mut errors = Vec::new();
+        let block = blocks.get(block_name).unwrap();
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -544,17 +955,75 @@ impl<'a> PieChart<'a> {
         let pie_chart_type = parse!(block, Option<&str>, block_name, "pie_chart_type");
 
         let pie_chart_type = match pie_chart_type {
-            Some(pie_chart_type) => Some(
-                PieChartType::from_str(pie_chart_type)
-                    .map_err(|e| SagError::language_error(block_name, Some("pie_chart_type"), e))?,
-            ),
+            Some(pie_chart_type) => PieChartType::from_str(pie_chart_type.0)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(pie_chart_type.0.to_string()),
+                        pie_chart_type.1,
+                    ))
+                })
+                .ok(),
             None => None,
         };
 
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let label = match label {
+            Ok((label, _)) => Some(label),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            label.unwrap(),
+            r#type.unwrap(),
+            source.unwrap(),
+            traces.unwrap(),
+            pie_chart_type,
+        ))
+    }
+
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        let (label, r#type, source, traces, pie_chart_type) = PieChart::check(blocks, block_name)?;
+
         Ok(PieChart {
             label,
-            r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
+            r#type,
             source,
             traces,
             pie_chart_type,
@@ -563,27 +1032,72 @@ impl<'a> PieChart<'a> {
 }
 
 impl<'a> BarChart<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
-
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
-        }
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+        let block = blocks.get(block_name).unwrap();
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
+        let label = match label {
+            Ok((label, _)) => Some(label),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            label.unwrap(),
+            r#type.unwrap(),
+            source.unwrap(),
+            traces.unwrap(),
+        ))
+    }
+
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        let (label, r#type, source, traces) = BarChart::check(blocks, block_name)?;
+
         Ok(BarChart {
             label,
-            r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
+            r#type,
             source,
             traces,
         })
@@ -591,27 +1105,72 @@ impl<'a> BarChart<'a> {
 }
 
 impl<'a> TimeSeries<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
-
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
-        }
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+        let block = blocks.get(block_name).unwrap();
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
+        let label = match label {
+            Ok((label, _)) => Some(label),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            label.unwrap(),
+            r#type.unwrap(),
+            source.unwrap(),
+            traces.unwrap(),
+        ))
+    }
+
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        let (label, r#type, source, traces) = TimeSeries::check(blocks, block_name)?;
+
         Ok(TimeSeries {
             label,
-            r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
+            r#type,
             source,
             traces,
         })
@@ -619,27 +1178,72 @@ impl<'a> TimeSeries<'a> {
 }
 
 impl<'a> XYChart<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
-
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
-        }
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+        let block = blocks.get(block_name).unwrap();
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
+        let label = match label {
+            Ok((label, _)) => Some(label),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            label.unwrap(),
+            r#type.unwrap(),
+            source.unwrap(),
+            traces.unwrap(),
+        ))
+    }
+
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        let (label, r#type, source, traces) = XYChart::check(blocks, block_name)?;
+
         Ok(XYChart {
             label,
-            r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
+            r#type,
             source,
             traces,
         })
@@ -647,24 +1251,60 @@ impl<'a> XYChart<'a> {
 }
 
 impl<'a> GrafanaSingleLine<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+        let block = blocks.get(block_name).unwrap();
 
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
-        }
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((r#type.unwrap(), source.unwrap(), traces.unwrap()))
+    }
+
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        let (r#type, source, traces) = GrafanaSingleLine::check(blocks, block_name)?;
+
         Ok(GrafanaSingleLine {
-            r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
+            r#type,
             source,
             traces,
         })
@@ -672,25 +1312,74 @@ impl<'a> GrafanaSingleLine<'a> {
 }
 
 impl<'a> GrafanaMultiLine<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+        let block = blocks.get(block_name).unwrap();
 
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
-        }
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let locations = parse!(block, Vec<&str>, block_name, "locations");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let locations = match locations {
+            Ok((locations, _)) => Some(locations),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            r#type.unwrap(),
+            source.unwrap(),
+            locations.unwrap(),
+            traces.unwrap(),
+        ))
+    }
+
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        let (r#type, source, locations, traces) = GrafanaMultiLine::check(blocks, block_name)?;
+
         Ok(GrafanaMultiLine {
-            r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
+            r#type,
             source,
             locations,
             traces,
@@ -699,25 +1388,74 @@ impl<'a> GrafanaMultiLine<'a> {
 }
 
 impl<'a> GrafanaExtValues<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+        let block = blocks.get(block_name).unwrap();
 
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
-        }
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let locations = parse!(block, Vec<&str>, block_name, "locations");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let locations = match locations {
+            Ok((locations, _)) => Some(locations),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            r#type.unwrap(),
+            source.unwrap(),
+            locations.unwrap(),
+            traces.unwrap(),
+        ))
+    }
+
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        let (r#type, source, locations, traces) = GrafanaExtValues::check(blocks, block_name)?;
+
         Ok(GrafanaExtValues {
-            r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
+            r#type,
             source,
             locations,
             traces,
@@ -726,25 +1464,74 @@ impl<'a> GrafanaExtValues<'a> {
 }
 
 impl<'a> GrafanaCalendar<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+        let block = blocks.get(block_name).unwrap();
 
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
-        }
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let locations = parse!(block, Vec<&str>, block_name, "locations");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
 
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let locations = match locations {
+            Ok((locations, _)) => Some(locations),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            r#type.unwrap(),
+            source.unwrap(),
+            locations.unwrap(),
+            traces.unwrap(),
+        ))
+    }
+
+    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        let (r#type, source, locations, traces) = GrafanaCalendar::check(blocks, block_name)?;
+
         Ok(GrafanaCalendar {
-            r#type: PanelType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
+            r#type,
             source,
             locations,
             traces,
@@ -753,27 +1540,56 @@ impl<'a> GrafanaCalendar<'a> {
 }
 
 impl<'a> Deployment<'a> {
-    fn new(blocks: &Blocks<'a>) -> Result<Self, SagError> {
+    fn check(blocks: &Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
         const SECTION_NAME: &str = "deployment";
+        let mut errors = Vec::new();
 
-        let block = &blocks
+        let block = blocks
             .get(SECTION_NAME)
-            .ok_or(SagError::missing_section(SECTION_NAME))?
-            .value;
-
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{SECTION_NAME} section is not a block"
+            .ok_or(SagError::internal_error(format!(
+                "Missing section {SECTION_NAME}"
             )));
+        if let Err(e) = block {
+            errors.push(e);
+            return Err(errors);
+        }
+
+        let block = block.unwrap();
+
+        if !block.value.is_block() {
+            errors.push(SagError::language_error(
+                LanguageErrorKind::InvalidType(),
+                block.position,
+            ));
+            return Err(errors);
         }
 
         let environments = parse!(block, Vec<&str>, SECTION_NAME, "environments");
 
-        let mut environments_map = HashMap::new();
-        for environment_name in environments {
-            let environment = Environment::new(blocks, environment_name)?;
+        if let Err(e) = environments {
+            errors.push(e);
+            return Err(errors);
+        }
 
-            environments_map.insert(environment_name, environment);
+        Ok(environments.unwrap())
+    }
+
+    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+        let environments = Deployment::check(blocks)?;
+        let mut errors = Vec::new();
+
+        let mut environments_map = HashMap::new();
+        for environment_name in environments.0 {
+            let environment = Environment::new(blocks, environment_name, environments.1);
+            if let Err(e) = environment {
+                errors.extend(e.into_iter());
+            } else {
+                environments_map.insert(environment_name, environment.unwrap());
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err(errors);
         }
 
         Ok(Deployment {
@@ -783,32 +1599,91 @@ impl<'a> Deployment<'a> {
 }
 
 impl<'a> Environment<'a> {
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, SagError> {
-        let block = &blocks
-            .get(block_name)
-            .ok_or(SagError::missing_section(block_name))?
-            .value;
+    fn check(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+        block_ref_pos: Position,
+    ) -> Result<(&'a str, i32, EnvironmentType), Vec<SagError>> {
+        let mut errors = Vec::new();
 
-        if !block.is_block() {
-            return Err(SagError::error(format!(
-                "{block_name} section is not a block"
-            )));
+        let block = blocks.get(block_name).ok_or(SagError::language_error(
+            LanguageErrorKind::MissingSection(block_name.to_string()),
+            block_ref_pos,
+        ));
+
+        if let Err(e) = block {
+            errors.push(e);
+            return Err(errors);
+        }
+
+        let block = block.unwrap();
+
+        if !block.value.is_block() {
+            errors.push(SagError::language_error(
+                LanguageErrorKind::InvalidType(),
+                block.position,
+            ));
+            return Err(errors);
         }
 
         let uri = parse!(block, &str, block_name, "uri");
         let port = parse!(block, &str, block_name, "port");
         let r#type = parse!(block, &str, block_name, "type");
 
-        let port = port.parse::<i32>().map_err(|_| {
-            SagError::language_error(block_name, Some("port"), "port is not an integer")
-        })?;
+        let port = match port {
+            Ok((port, _)) => port
+                .parse::<i32>()
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(port.to_string()),
+                        block.position,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
 
-        Ok(Environment {
-            uri,
-            port,
-            r#type: EnvironmentType::from_str(r#type)
-                .map_err(|e| SagError::language_error(block_name, Some("type"), e))?,
-        })
+        let uri = match uri {
+            Ok((uri, _)) => Some(uri),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => EnvironmentType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((uri.unwrap(), port.unwrap(), r#type.unwrap()))
+    }
+
+    fn new(
+        blocks: &Blocks<'a>,
+        block_name: &'a str,
+        block_ref_pos: Position,
+    ) -> Result<Self, Vec<SagError>> {
+        let (uri, port, r#type) = Environment::check(blocks, block_name, block_ref_pos)?;
+
+        Ok(Environment { uri, port, r#type })
     }
 }
 

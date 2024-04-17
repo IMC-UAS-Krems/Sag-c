@@ -3,11 +3,18 @@
 /// parse!(`HashMap`, `type`, `section_name`, `field_name`)
 macro_rules! parse {
     ($map:expr, Option<$fty:ty>, $block_name:expr, $field_name:expr) => {
-        match $map {
-            Value::Block(map) => match map.get($field_name) {
+        match &$map.value {
+            Value::Block(block) => match block.get($field_name) {
                 Some(field) => Some(
                     TryInto::<$fty>::try_into(&field.value)
-                        .map_err(|e| SagError::language_error($block_name, Some($field_name), e))?,
+                        .map_err(|_| {
+                            SagError::language_error(
+                                LanguageErrorKind::InvalidType(),
+                                field.position,
+                            )
+                        })
+                        .map(|v| (v, field.position))
+                        .unwrap(),
                 ),
                 None => None,
             },
@@ -15,14 +22,23 @@ macro_rules! parse {
         }
     };
     ($map:expr, $fty:ty, $block_name:expr, $field_name:expr) => {
-        match $map {
-            Value::Block(map) => match map.get($field_name) {
+        match &$map.value {
+            Value::Block(block) => match block.get($field_name) {
                 Some(field) => {
                     let result: Result<$fty, _> = TryInto::<$fty>::try_into(&field.value);
                     result
-                        .map_err(|e| SagError::language_error($block_name, Some($field_name), e))?
+                        .map_err(|_| {
+                            SagError::language_error(
+                                LanguageErrorKind::InvalidType(),
+                                field.position,
+                            )
+                        })
+                        .map(|v| (v, field.position))
                 }
-                None => return Err(SagError::missing_field($block_name, $field_name)),
+                None => Err(SagError::language_error(
+                    LanguageErrorKind::MissingField($field_name.to_string()),
+                    $map.position,
+                )),
             },
             _ => unreachable!(),
         }
