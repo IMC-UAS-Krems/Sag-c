@@ -30,12 +30,6 @@ pub struct Service<'a> {
 }
 
 #[derive(Debug)]
-pub struct Test<'a> {
-    pub one: &'a str,
-    pub two: &'a str,
-}
-
-#[derive(Debug)]
 pub enum Scope {
     Service,
     Industry,
@@ -252,14 +246,14 @@ impl<'a> Config<'a> {
         let service = match service {
             Ok(service) => Some(service),
             Err(e) => {
-                errors.extend(e.into_iter());
+                errors.extend(e);
                 None
             }
         };
         let data = match data {
             Ok(data) => Some(data),
             Err(e) => {
-                errors.extend(e.into_iter());
+                errors.extend(e);
                 None
             }
         };
@@ -267,7 +261,7 @@ impl<'a> Config<'a> {
         let application = match application {
             Ok(application) => Some(application),
             Err(e) => {
-                errors.extend(e.into_iter());
+                errors.extend(e);
                 None
             }
         };
@@ -275,7 +269,7 @@ impl<'a> Config<'a> {
         let deployment = match deployment {
             Ok(deployment) => Some(deployment),
             Err(e) => {
-                errors.extend(e.into_iter());
+                errors.extend(e);
                 None
             }
         };
@@ -438,7 +432,7 @@ impl<'a> SagData<'a> {
 
         let data_sources = data_sources.unwrap();
 
-        return Ok(data_sources);
+        Ok(data_sources)
     }
 
     fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
@@ -839,10 +833,7 @@ impl<'a> GeoMap<'a> {
                 None
             }
         };
-        let area = match area {
-            Some((a, _)) => Some(a),
-            None => None,
-        };
+        let area = area.map(|area| area.0);
 
         if !errors.is_empty() {
             return Err(errors);

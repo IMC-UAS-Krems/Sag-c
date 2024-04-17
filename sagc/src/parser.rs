@@ -505,10 +505,7 @@ pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
         Err(e) => {
             return Err(e
                 .into_iter()
-                .filter(|e| match e {
-                    SagError::LanguageError(_e) => true,
-                    _ => false,
-                })
+                .filter(|e| matches!(e, SagError::LanguageError(_e)))
                 .collect());
         }
     };

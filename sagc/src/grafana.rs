@@ -4,7 +4,7 @@ use crate::sections::{
     Service, TimeSeries, Version, XYChart,
 };
 
-use serde::{de::value, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use url::Url;
 
@@ -350,10 +350,7 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                     };
                     (name.to_string(), grafana_panel)
                 })
-                .filter(|(_, panel)| match panel {
-                    GrafanaPanel::NotSupported => false,
-                    _ => true,
-                })
+                .filter(|(_, panel)| !matches!(panel, GrafanaPanel::NotSupported))
                 .collect(),
         }
     }
