@@ -8,11 +8,33 @@ use sagc::dash::Dash;
 use sagc::errors::{SagError, WebErrorPosition};
 use sagc::grafana::Grafana;
 use sagc::parser::{parse_input, Position};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 struct Input {
     source: String,
+}
+
+#[derive(Debug, Serialize)]
+struct NoErrors {
+    status: String,
+}
+
+#[post("/check")]
+async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
+    let result = parse_input(input.source.as_str());
+
+    if let Err(errors) = result {
+        let error = WebErrorPosition {
+            status: "error".to_string(),
+            errors,
+        };
+        return Err(error);
+    }
+
+    Ok(Json(NoErrors {
+        status: "ok".to_string(),
+    }))
 }
 
 #[post("/grafana")]
@@ -129,6 +151,7 @@ async fn main() -> std::io::Result<()> {
             .service(grafana)
             .service(dash)
             .service(status)
+            .service(check)
             .service(index)
             .service(test)
             .wrap(Logger::default())
