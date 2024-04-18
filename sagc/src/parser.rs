@@ -217,7 +217,7 @@ fn parse_vec(input: Span) -> IResult {
             row_start: line,
             row_end: line,
             col_start,
-            col_end: col_start + result.len(),
+            col_end: col_start + result.iter().fold(0, |acc, s| acc + s.len()),
         };
         (
             input,
