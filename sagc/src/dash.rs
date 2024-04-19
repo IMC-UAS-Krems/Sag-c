@@ -307,8 +307,8 @@ impl From<Deployment<'_>> for DashDeployment {
         DashDeployment {
             environments: value
                 .environments
-                .iter()
-                .map(|(name, environment)| (name.to_string(), (*environment).into()))
+                .into_iter()
+                .map(|(name, environment)| (name.to_string(), environment.into()))
                 .collect(),
         }
     }

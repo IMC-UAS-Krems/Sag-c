@@ -16,7 +16,7 @@ fn criterion_benchmark_parse(c: &mut Criterion) {
                     let sag: Grafana = Grafana::from(sag);
                     sag
                 }
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("{:?}", e),
             }
         })
     });

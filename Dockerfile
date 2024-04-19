@@ -1,4 +1,4 @@
-FROM rust:1.75-buster AS build
+FROM rust:1-buster AS build
 
 WORKDIR /app
 COPY . .

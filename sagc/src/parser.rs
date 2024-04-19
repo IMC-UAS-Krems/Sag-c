@@ -217,7 +217,7 @@ fn parse_vec(input: Span) -> IResult {
             row_start: line,
             row_end: line,
             col_start,
-            col_end: col_start + result.len(),
+            col_end: col_start + result.iter().fold(0, |acc, s| acc + s.len()),
         };
         (
             input,
@@ -500,10 +500,13 @@ pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
         }
     };
 
-    let config = match Config::new(&blocks) {
+    let config = match Config::new(blocks) {
         Ok(config) => config,
         Err(e) => {
-            return Err(vec![e]);
+            return Err(e
+                .into_iter()
+                .filter(|e| matches!(e, SagError::LanguageError(_e)))
+                .collect());
         }
     };
 
