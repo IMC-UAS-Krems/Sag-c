@@ -311,6 +311,17 @@ fn seek_to_input(input: Span) -> Span {
     }
 }
 
+fn parse_whitespace_line(input: Span) -> nom::IResult<Span, Span> {
+    let result = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(|c| {
+        c == ' ' || c == '\t'
+    })(input);
+
+    match result {
+        Ok((input, _)) => line_ending(input),
+        Err(_) => line_ending(input),
+    }
+}
+
 fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut input = input;
     let mut tokens = Vec::new();
@@ -318,7 +329,7 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut last_indent = 0;
     let mut last_block_indent = 0;
 
-    input = seek_to_input(input);
+    // input = seek_to_input(input);
 
     loop {
         let result = parse_indent(input);
@@ -332,14 +343,32 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
                     _ => unreachable!(),
                 };
                 tokens.push(token);
+
+                if let Ok((i, _)) = parse_whitespace_line(input) {
+                    input = i;
+                    continue;
+                }
             }
             Err(_) => {
-                let (i, token) = handle_error(input, TokenValue::IndentError).unwrap();
-                input = i;
-                errors.push(token);
-                continue;
+                //check if the line only consists of spaces or tabs
+                let white_parse = parse_whitespace_line(input);
+                match white_parse {
+                    //if yes continue as usual
+                    Ok((i, _)) => {
+                        input = i;
+                        continue;
+                    }
+                    //if not push an error
+                    Err(_) => {
+                        let (i, token) = handle_error(input, TokenValue::IndentError).unwrap();
+                        input = i;
+                        errors.push(token);
+                        continue;
+                    }
+                }
             }
         }
+
         // if error, try to parse section line (like `alt` in nom)
         if let Ok((i, result)) = parse_block_name(input) {
             input = i;
