@@ -95,7 +95,6 @@ enum DashPanel {
     GeoMap(DashGeoMap),
     #[serde(rename = "xy_chart")]
     XYChart(DashXYChart),
-    NotSupported,
 }
 
 #[derive(Debug, Serialize)]
@@ -140,7 +139,7 @@ fn get_traces_with_data_source_name(
             PanelTypeUnion::BarChart(bar_chart) => bar_chart.source == data_source_name,
             PanelTypeUnion::GeoMap(geo_map) => geo_map.source == data_source_name,
             PanelTypeUnion::XYChart(xy_chart) => xy_chart.source == data_source_name,
-            _ => todo!(),
+            _ => unreachable!("All unsupported panels should be filtered out by now."),
         })
         .flat_map(|trace| match trace {
             PanelTypeUnion::PieChart(pie_chart) => pie_chart.traces.iter(),
@@ -148,14 +147,24 @@ fn get_traces_with_data_source_name(
             PanelTypeUnion::BarChart(bar_chart) => bar_chart.traces.iter(),
             PanelTypeUnion::GeoMap(geo_map) => geo_map.data.iter(),
             PanelTypeUnion::XYChart(xy_chart) => xy_chart.traces.iter(),
-            _ => todo!(),
+            _ => unreachable!("All unsupported panels should be filtered out by now."),
         })
         .map(|f| f.to_string())
         .collect()
 }
 
 impl<'a> From<Config<'a>> for Dash {
-    fn from(config: Config<'a>) -> Self {
+    fn from(mut config: Config<'a>) -> Self {
+        config.filter_panels(|panel| {
+            matches!(
+                panel,
+                PanelTypeUnion::PieChart(_)
+                    | PanelTypeUnion::TimeSeries(_)
+                    | PanelTypeUnion::BarChart(_)
+                    | PanelTypeUnion::GeoMap(_)
+                    | PanelTypeUnion::XYChart(_)
+            )
+        });
         // Map Config fields to Dash fields
         let service = config.service.into();
         let data_sources = config
@@ -281,11 +290,7 @@ impl From<Application<'_>> for DashApplication {
                         }
                         PanelTypeUnion::GeoMap(geo_map) => DashPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => DashPanel::XYChart(xy_chart.into()),
-                        PanelTypeUnion::GrafanaMap(_) => DashPanel::NotSupported,
-                        PanelTypeUnion::GrafanaSingleLine(_) => DashPanel::NotSupported,
-                        PanelTypeUnion::GrafanaMultiLine(_) => DashPanel::NotSupported,
-                        PanelTypeUnion::GrafanaExtValues(_) => DashPanel::NotSupported,
-                        PanelTypeUnion::GrafanaCalendar(_) => DashPanel::NotSupported,
+                        _ => unreachable!("All unsupported panels should be filtered out by now."),
                     };
                     (name.to_string(), grafana_panel)
                 })

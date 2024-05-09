@@ -315,6 +315,12 @@ impl<'a> Config<'a> {
     //    }
     //    Ok(())
     //}
+    pub fn filter_panels<F>(&mut self, filter: F)
+    where
+        F: Fn(&PanelTypeUnion) -> bool,
+    {
+        self.application.panels.retain(|_, panel| filter(panel));
+    }
 }
 
 impl<'a> Service<'a> {
@@ -701,7 +707,7 @@ impl<'a> Application<'a> {
     }
 
     fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
-        let (r#type, dashboard ,layout, roles, panels) = Application::check(blocks)?;
+        let (r#type, dashboard, layout, roles, panels) = Application::check(blocks)?;
         let mut errors = Vec::new();
 
         let mut panels_map = HashMap::new();
@@ -1867,10 +1873,9 @@ impl FromStr for DashboardType {
         match s {
             "Dash" => Ok(DashboardType::Dash),
             "Grafana" => Ok(DashboardType::Grafana),
-            _ => Err(format!("invalid dashboard type: {}",s)),
+            _ => Err(format!("invalid dashboard type: {}", s)),
         }
     }
-    
 }
 
 impl FromStr for Layout {
