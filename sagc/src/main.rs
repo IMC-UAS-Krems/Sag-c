@@ -1,13 +1,14 @@
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::web::{self, Json};
-use actix_web::{get, post, App, HttpServer, Responder, Result};
+use actix_web::{get, post, App, HttpResponse, HttpServer, Responder, Result};
 use rand::seq::IteratorRandom;
 use rand::Rng;
 use sagc::dash::Dash;
 use sagc::errors::{SagError, WebErrorPosition};
 use sagc::grafana::Grafana;
 use sagc::parser::{parse_input, Position};
+use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -18,6 +19,22 @@ struct Input {
 #[derive(Debug, Serialize)]
 struct NoErrors {
     status: String,
+}
+
+#[derive(Debug, Serialize)]
+enum DashboardResponse {
+    Grafana(Grafana),
+    Dash(Dash),
+}
+
+impl Responder for DashboardResponse {
+    type Body = actix_web::body::BoxBody;
+    fn respond_to(self, _: &actix_web::HttpRequest) -> HttpResponse {
+        match self {
+            DashboardResponse::Grafana(grafana_json) => HttpResponse::Ok().json(grafana_json),
+            DashboardResponse::Dash(dash_json) => HttpResponse::Ok().json(dash_json),
+        }
+    }
 }
 
 #[post("/check")]
@@ -35,6 +52,38 @@ async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPositi
     Ok(Json(NoErrors {
         status: "ok".to_string(),
     }))
+}
+
+#[post("/compile")]
+async fn compile(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
+    let result = parse_input(input.source.as_str());
+
+    if let Ok(config) = result {
+        // dbg!(&grafana);
+        match config.application.dashboard {
+            DashboardType::Grafana => {
+                let grafana_json: Grafana = Grafana::from(config);
+                log::info!("Grafana app compiled successfully!");
+                return Ok(DashboardResponse::Grafana(grafana_json));
+            }
+            DashboardType::Dash => {
+                let dash_json: Dash = Dash::from(config);
+                log::info!("Dash app compiled successfully!");
+                return Ok(DashboardResponse::Dash(dash_json));
+            }
+        }
+    }
+    // log::error!(
+    //     "Grafana app compilation failed with error: {}!",
+    //     result.as_ref().err().unwrap()
+    // );
+    //
+    let error = WebErrorPosition {
+        status: "error".to_string(),
+        errors: result.err().unwrap(),
+    };
+
+    Err(error)
 }
 
 #[post("/grafana")]
@@ -153,6 +202,7 @@ async fn main() -> std::io::Result<()> {
             .service(status)
             .service(check)
             .service(index)
+            .service(compile)
             .service(test)
             .wrap(Logger::default())
     })
