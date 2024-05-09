@@ -38,6 +38,7 @@ pub enum LanguageErrorKind {
     InvalidValue(String),
     Generic(String),
     MissingSection(String),
+    InvalidPanelType(String),
 }
 
 // new
@@ -55,6 +56,9 @@ impl ToString for LanguageErrorKind {
             LanguageErrorKind::InvalidValue(value) => format!("Invalid value '{}'", value),
             LanguageErrorKind::Generic(error) => error.to_string(),
             LanguageErrorKind::MissingSection(section) => format!("Missing section '{}'", section),
+            LanguageErrorKind::InvalidPanelType(panel) => {
+                format!("Unsupported panel type '{}'", panel)
+            }
         }
     }
 }

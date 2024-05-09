@@ -725,6 +725,8 @@ impl<'a> Application<'a> {
             return Err(errors);
         }
 
+        Application::check_panels(&panels_map, &dashboard, &panels.1)?;
+
         Ok(Application {
             r#type,
             dashboard,
@@ -732,6 +734,35 @@ impl<'a> Application<'a> {
             roles,
             panels: panels_map,
         })
+    }
+
+    fn check_panels(
+        panels: &HashMap<&str, PanelTypeUnion>,
+        dashboard: &DashboardType,
+        position: &Position,
+    ) -> Result<(), Vec<SagError>> {
+        let mut errors = Vec::new();
+        match dashboard {
+            DashboardType::Dash => {
+                for panel in panels.values() {
+                    if !matches!(
+                        panel,
+                        PanelTypeUnion::PieChart(_)
+                            | PanelTypeUnion::TimeSeries(_)
+                            | PanelTypeUnion::BarChart(_)
+                            | PanelTypeUnion::GeoMap(_)
+                            | PanelTypeUnion::XYChart(_)
+                    ) {
+                        errors.push(SagError::language_error(
+                            LanguageErrorKind::InvalidPanelType(panel.to_string()),
+                            *position,
+                        ));
+                    }
+                }
+                return Err(errors);
+            }
+            DashboardType::Grafana => return Ok(()),
+        }
     }
 }
 
