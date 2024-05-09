@@ -1,11 +1,13 @@
 use nom::bytes::complete::tag;
 use nom::character::complete::i16;
 use nom::multi::separated_list1;
+use nom::Err;
 use nom::IResult;
 use std::collections::HashMap;
 use std::str::FromStr;
 use url::Url;
 
+use crate::dash;
 use crate::errors::LanguageErrorKind;
 use crate::errors::SagError;
 use crate::parse;
@@ -83,6 +85,7 @@ pub enum SourceType {
 #[derive(Debug)]
 pub struct Application<'a> {
     pub r#type: ApplicationType,
+    pub dashboard: DashboardType,
     pub layout: Layout,
     pub roles: Vec<&'a str>,
     pub panels: HashMap<&'a str, PanelTypeUnion<'a>>, // called 'visualizations' for Dash, e.g. <name>: <visualization>
@@ -94,6 +97,12 @@ pub enum ApplicationType {
     Mobile,
     Desktop,
     Server,
+}
+
+#[derive(Debug)]
+pub enum DashboardType {
+    Dash,
+    Grafana,
 }
 
 #[derive(Debug)]
@@ -584,6 +593,7 @@ impl<'a> Application<'a> {
     ) -> Result<
         (
             ApplicationType,
+            DashboardType,
             Layout,
             Vec<&'a str>,
             (Vec<&'a str>, Position),
@@ -614,6 +624,7 @@ impl<'a> Application<'a> {
             return Err(errors);
         }
         let r#type = parse!(block, &str, SECTION_NAME, "type");
+        let dashboard = parse!(block, &str, SECTION_NAME, "dashboard");
         let layout = parse!(block, &str, SECTION_NAME, "layout");
         let roles = parse!(block, Vec<&str>, SECTION_NAME, "roles");
         let panels = parse!(block, Vec<&str>, SECTION_NAME, "panels");
@@ -624,6 +635,21 @@ impl<'a> Application<'a> {
                     errors.push(SagError::language_error(
                         LanguageErrorKind::InvalidValue(r#type.to_string()),
                         r#type_pos,
+                    ));
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let dashboard: Option<DashboardType> = match dashboard {
+            Ok((dashboard, dashboard_pos)) => DashboardType::from_str(dashboard)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(dashboard.to_string()),
+                        dashboard_pos,
                     ));
                 })
                 .ok(),
@@ -669,6 +695,7 @@ impl<'a> Application<'a> {
 
         Ok((
             r#type.unwrap(),
+            dashboard.unwrap(),
             layout.unwrap(),
             roles.unwrap(),
             panels.unwrap(),
@@ -676,7 +703,7 @@ impl<'a> Application<'a> {
     }
 
     fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
-        let (r#type, layout, roles, panels) = Application::check(blocks)?;
+        let (r#type, dashboard ,layout, roles, panels) = Application::check(blocks)?;
         let mut errors = Vec::new();
 
         let mut panels_map = HashMap::new();
@@ -696,6 +723,7 @@ impl<'a> Application<'a> {
 
         Ok(Application {
             r#type,
+            dashboard,
             layout,
             roles,
             panels: panels_map,
@@ -1835,6 +1863,18 @@ impl FromStr for ApplicationType {
     }
 }
 
+impl FromStr for DashboardType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Dash" => Ok(DashboardType::Dash),
+            "Grafana" => Ok(DashboardType::Grafana),
+            _ => Err(format!("invalid dashboard type: {}",s)),
+        }
+    }
+    
+}
+
 impl FromStr for Layout {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -1942,6 +1982,15 @@ impl ToString for ApplicationType {
             ApplicationType::Mobile => String::from("Mobile"),
             ApplicationType::Desktop => String::from("Desktop"),
             ApplicationType::Server => String::from("Server"),
+        }
+    }
+}
+
+impl ToString for DashboardType {
+    fn to_string(&self) -> String {
+        match self {
+            DashboardType::Dash => String::from("Dash"),
+            DashboardType::Grafana => String::from("Grafana"),
         }
     }
 }
