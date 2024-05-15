@@ -1,15 +1,22 @@
+use std::str::FromStr;
+
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::web::{self, Json};
 use actix_web::{get, post, App, HttpResponse, HttpServer, Responder, Result};
+use awc::http::Uri;
+use awc::Client;
 use rand::seq::IteratorRandom;
 use rand::Rng;
 use sagc::dash::Dash;
-use sagc::errors::{SagError, WebErrorPosition};
+use sagc::errors::{CompileError, GeneralError, SagError, WebErrorPosition};
 use sagc::grafana::Grafana;
 use sagc::parser::{parse_input, Position};
 use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
+
+type GrafanaUri = Uri;
+type DeployUri = Uri;
 
 #[derive(Debug, Deserialize)]
 struct Input {
@@ -37,6 +44,47 @@ impl Responder for DashboardResponse {
     }
 }
 
+async fn fetch_grafana_model(
+    client: &Client,
+    uri: &Uri,
+    grafana_json: &Grafana,
+) -> Result<serde_json::Value, GeneralError> {
+    let response = client.get(uri).send_json(grafana_json).await;
+    let mut response = response.unwrap();
+    if response.status().is_success() {
+        let body = response.json::<serde_json::Value>().await.unwrap();
+        Ok(body)
+    } else {
+        log::error!(
+            "Error ({}): {}",
+            response.status(),
+            String::from_utf8(response.body().await.unwrap().to_ascii_lowercase()).unwrap()
+        );
+        Err(GeneralError::new(
+            "Error fetching Grafana model".to_string(),
+        ))
+    }
+}
+
+async fn deploy(
+    client: &Client,
+    uri: &Uri,
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, GeneralError> {
+    let response = client.post(uri).send_json(&payload).await;
+    let mut response = response.unwrap();
+    if response.status().is_success() {
+        Ok(response.json::<serde_json::Value>().await.unwrap())
+    } else {
+        log::error!(
+            "Error ({}): {}",
+            response.status(),
+            String::from_utf8(response.body().await.unwrap().to_ascii_lowercase()).unwrap()
+        );
+        Err(GeneralError::new("Error deploying".to_string()))
+    }
+}
+
 #[post("/check")]
 async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
     let result = parse_input(input.source.as_str());
@@ -55,35 +103,43 @@ async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPositi
 }
 
 #[post("/compile")]
-async fn compile(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
+async fn compile(
+    input: web::Json<Input>,
+    client: web::Data<Client>,
+    grafana_url: web::Data<GrafanaUri>,
+    deploy_url: web::Data<DeployUri>,
+) -> Result<impl Responder, CompileError> {
     let result = parse_input(input.source.as_str());
 
     if let Ok(config) = result {
         // dbg!(&grafana);
-        match config.application.dashboard {
+        let deploy_layload: serde_json::Value = match config.application.dashboard {
             DashboardType::Grafana => {
                 let grafana_json: Grafana = Grafana::from(config);
                 log::info!("Grafana app compiled successfully!");
-                return Ok(DashboardResponse::Grafana(grafana_json));
+                fetch_grafana_model(&client, &grafana_url, &grafana_json)
+                    .await
+                    .map_err(CompileError::General)?
             }
             DashboardType::Dash => {
                 let dash_json: Dash = Dash::from(config);
                 log::info!("Dash app compiled successfully!");
-                return Ok(DashboardResponse::Dash(dash_json));
+                serde_json::json!(dash_json)
             }
-        }
-    }
-    // log::error!(
-    //     "Grafana app compilation failed with error: {}!",
-    //     result.as_ref().err().unwrap()
-    // );
-    //
-    let error = WebErrorPosition {
-        status: "error".to_string(),
-        errors: result.err().unwrap(),
-    };
+        };
+        let response = deploy(&client, &deploy_url, deploy_layload)
+            .await
+            .map_err(CompileError::General)?;
 
-    Err(error)
+        Ok(Json(response))
+    } else {
+        let error = WebErrorPosition {
+            status: "error".to_string(),
+            errors: result.err().unwrap(),
+        };
+
+        Err(CompileError::WebPos(error))
+    }
 }
 
 #[post("/grafana")]
@@ -96,11 +152,6 @@ async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosi
         log::info!("Grafana app compiled successfully!");
         return Ok(Json(grafana));
     }
-    // log::error!(
-    //     "Grafana app compilation failed with error: {}!",
-    //     result.as_ref().err().unwrap()
-    // );
-    //
     let error = WebErrorPosition {
         status: "error".to_string(),
         errors: result.err().unwrap(),
@@ -118,11 +169,6 @@ async fn dash(input: String) -> Result<impl Responder, WebErrorPosition> {
         log::info!("Dash app compiled successfully!");
         return Ok(Json(dash));
     }
-    // log::error!(
-    //     "Dash app compilation failed with error: {}!",
-    //     result.as_ref().err().unwrap()
-    // );
-
     let error = WebErrorPosition {
         status: "error".to_string(),
         errors: result.err().unwrap(),
@@ -189,13 +235,22 @@ async fn index() -> impl Responder {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
-    HttpServer::new(|| {
+
+    let grafana_url = std::env::var("GRAFANA_URL").unwrap_or("http://localhost:9000".to_string());
+    let deploy_url = std::env::var("DEPLOY_URL").unwrap_or("http://localhost:9001".to_string());
+    let grafan_url: GrafanaUri = GrafanaUri::from_str(grafana_url.as_str()).unwrap();
+    let deploy_url: DeployUri = DeployUri::from_str(deploy_url.as_str()).unwrap();
+
+    HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
             .allowed_methods(vec!["GET", "POST"])
             .allow_any_header()
             .max_age(3600);
         App::new()
+            .app_data(web::Data::new(Client::default()))
+            .app_data(web::Data::new(grafan_url.clone()))
+            .app_data(web::Data::new(deploy_url.clone()))
             .wrap(cors)
             .service(grafana)
             .service(dash)
