@@ -18,9 +18,17 @@ use serde::{Deserialize, Serialize};
 type GrafanaUri = Uri;
 type DeployUri = Uri;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct Input {
     source: String,
+    user_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct DeployPayload {
+    source: String,
+    user_id: String,
+    dashboard_type: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -32,6 +40,12 @@ struct NoErrors {
 enum DashboardResponse {
     Grafana(Grafana),
     Dash(Dash),
+}
+
+#[derive(Debug, Serialize)]
+struct UrlResponse {
+    url: String,
+    status: String,
 }
 
 impl Responder for DashboardResponse {
@@ -69,12 +83,12 @@ async fn fetch_grafana_model(
 async fn deploy(
     client: &Client,
     uri: &Uri,
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, GeneralError> {
+    payload: DeployPayload,
+) -> Result<String, GeneralError> {
     let response = client.post(uri).send_json(&payload).await;
     let mut response = response.unwrap();
     if response.status().is_success() {
-        Ok(response.json::<serde_json::Value>().await.unwrap())
+        Ok(String::from_utf8(response.body().await.unwrap().to_vec()).unwrap())
     } else {
         log::error!(
             "Error ({}): {}",
@@ -113,6 +127,10 @@ async fn compile(
 
     if let Ok(config) = result {
         // dbg!(&grafana);
+        let dashboard_type = match config.application.dashboard {
+            DashboardType::Grafana => "grafana",
+            DashboardType::Dash => "dash",
+        };
         let deploy_layload: serde_json::Value = match config.application.dashboard {
             DashboardType::Grafana => {
                 let grafana_json: Grafana = Grafana::from(config);
@@ -127,11 +145,19 @@ async fn compile(
                 serde_json::json!(dash_json)
             }
         };
+        let deploy_layload = DeployPayload {
+            source: deploy_layload.to_string(),
+            user_id: input.user_id.clone(),
+            dashboard_type: dashboard_type.to_string(),
+        };
         let response = deploy(&client, &deploy_url, deploy_layload)
             .await
             .map_err(CompileError::General)?;
 
-        Ok(Json(response))
+        Ok(Json(UrlResponse {
+            url: response,
+            status: "ok".to_string(),
+        }))
     } else {
         let error = WebErrorPosition {
             status: "error".to_string(),
