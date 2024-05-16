@@ -63,7 +63,7 @@ async fn fetch_grafana_model(
     uri: &Uri,
     grafana_json: &Grafana,
 ) -> Result<serde_json::Value, GeneralError> {
-    let response = client.get(uri).send_json(grafana_json).await;
+    let response = client.post(uri).send_json(grafana_json).await;
     let mut response = response.unwrap();
     if response.status().is_success() {
         let body = response.json::<serde_json::Value>().await.unwrap();
