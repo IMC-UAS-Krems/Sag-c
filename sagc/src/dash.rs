@@ -46,6 +46,7 @@ struct DashGeoMap {
     chart_type: String,
     source: String,
     data: Vec<String>,
+    name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -56,6 +57,7 @@ struct DashPieChart {
     traces: Vec<String>,
     #[serde(default)]
     pie_chart_type: Option<String>,
+    name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,6 +66,7 @@ struct DashBarChart {
     chart_type: String,
     source: String,
     traces: Vec<String>,
+    name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -72,6 +75,7 @@ struct DashTimeSeries {
     chart_type: String,
     source: String,
     traces: Vec<String>,
+    name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -80,6 +84,7 @@ struct DashXYChart {
     chart_type: String,
     source: String,
     traces: Vec<String>,
+    name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -223,6 +228,7 @@ impl From<GeoMap<'_>> for DashGeoMap {
             chart_type: value.r#type.to_string(),
             source: value.source.to_string(),
             data: value.data.iter().map(|f| f.to_string()).collect(),
+            name: value.label.to_string(),
         }
     }
 }
@@ -234,6 +240,7 @@ impl From<PieChart<'_>> for DashPieChart {
             source: value.source.to_string(),
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
             pie_chart_type: value.pie_chart_type.map(|f| f.to_string()),
+            name: value.label.to_string(),
         }
     }
 }
@@ -244,6 +251,7 @@ impl From<BarChart<'_>> for DashBarChart {
             chart_type: value.r#type.to_string(),
             source: value.source.to_string(),
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
+            name: value.label.to_string(),
         }
     }
 }
@@ -254,6 +262,7 @@ impl From<TimeSeries<'_>> for DashTimeSeries {
             chart_type: value.r#type.to_string(),
             source: value.source.to_string(),
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
+            name: value.label.to_string(),
         }
     }
 }
@@ -264,6 +273,7 @@ impl From<XYChart<'_>> for DashXYChart {
             chart_type: value.r#type.to_string(),
             source: value.source.to_string(),
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
+            name: value.label.to_string(),
         }
     }
 }
