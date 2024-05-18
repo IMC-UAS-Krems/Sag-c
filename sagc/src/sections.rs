@@ -715,12 +715,11 @@ impl<'a> Application<'a> {
         for panel_name in panels.0 {
             let panel = PanelTypeUnion::new(blocks, panel_name, panels.1);
             if let Err(e) = panel {
-                errors.extend(e.into_iter());
+                errors.extend(e);
             } else {
                 panels_map.insert(panel_name, panel.unwrap());
             }
         }
-
         if !errors.is_empty() {
             return Err(errors);
         }
@@ -759,7 +758,10 @@ impl<'a> Application<'a> {
                         ));
                     }
                 }
-                return Err(errors);
+                if !errors.is_empty() {
+                    return Err(errors);
+                }
+                return Ok(());
             }
             DashboardType::Grafana => return Ok(()),
         }
@@ -859,7 +861,7 @@ impl<'a> GeoMap<'a> {
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let data = parse!(block, Vec<&str>, block_name, "data");
-        let area = parse!(block, Option<&str>, block_name, "label");
+        let area = parse!(block, Option<&str>, block_name, "area");
 
         let label = match label {
             Ok((label, _)) => Some(label),
