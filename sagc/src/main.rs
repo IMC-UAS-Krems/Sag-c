@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::time::Duration;
 
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
@@ -15,8 +16,10 @@ use sagc::parser::{parse_input, Position};
 use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
 
-type GrafanaUri = Uri;
-type DeployUri = Uri;
+#[derive(Debug, Clone)]
+struct GrafanaUri(Uri);
+#[derive(Debug, Clone)]
+struct DeployUri(Uri);
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Input {
@@ -63,6 +66,7 @@ async fn fetch_grafana_model(
     uri: &Uri,
     grafana_json: &Grafana,
 ) -> Result<serde_json::Value, GeneralError> {
+    log::info!("Fetching Grafana model from {}...", uri);
     let response = client.post(uri).send_json(grafana_json).await;
     let mut response = response.unwrap();
     if response.status().is_success() {
@@ -85,7 +89,11 @@ async fn deploy(
     uri: &Uri,
     payload: DeployPayload,
 ) -> Result<String, GeneralError> {
-    let response = client.post(uri).send_json(&payload).await;
+    let response = client
+        .post(uri)
+        .timeout(Duration::new(60 * 5, 0))
+        .send_json(&payload)
+        .await;
     let mut response = response.unwrap();
     if response.status().is_success() {
         Ok(String::from_utf8(response.body().await.unwrap().to_vec()).unwrap())
@@ -120,8 +128,8 @@ async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPositi
 async fn compile(
     input: web::Json<Input>,
     client: web::Data<Client>,
-    grafana_url: web::Data<GrafanaUri>,
     deploy_url: web::Data<DeployUri>,
+    grafana_url: web::Data<GrafanaUri>,
 ) -> Result<impl Responder, CompileError> {
     let result = parse_input(input.source.as_str());
 
@@ -135,7 +143,7 @@ async fn compile(
             DashboardType::Grafana => {
                 let grafana_json: Grafana = Grafana::from(config);
                 log::info!("Grafana app compiled successfully!");
-                fetch_grafana_model(&client, &grafana_url, &grafana_json)
+                fetch_grafana_model(&client, &grafana_url.0, &grafana_json)
                     .await
                     .map_err(CompileError::General)?
             }
@@ -150,7 +158,7 @@ async fn compile(
             user_id: input.user_id.clone(),
             dashboard_type: dashboard_type.to_string(),
         };
-        let response = deploy(&client, &deploy_url, deploy_layload)
+        let response = deploy(&client, &deploy_url.0, deploy_layload)
             .await
             .map_err(CompileError::General)?;
 
@@ -262,10 +270,15 @@ async fn index() -> impl Responder {
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    let grafana_url = std::env::var("GRAFANA_URL").unwrap_or("http://localhost:9000".to_string());
-    let deploy_url = std::env::var("DEPLOY_URL").unwrap_or("http://localhost:9001".to_string());
-    let grafan_url: GrafanaUri = GrafanaUri::from_str(grafana_url.as_str()).unwrap();
-    let deploy_url: DeployUri = DeployUri::from_str(deploy_url.as_str()).unwrap();
+    let mut grafana_url =
+        std::env::var("GRAFANA_URL").unwrap_or("http://localhost:9000".to_string());
+    let mut deploy_url = std::env::var("DEPLOY_URL").unwrap_or("http://localhost:9001".to_string());
+
+    grafana_url.push('/');
+    deploy_url.push_str("/deploy");
+
+    let grafan_url: GrafanaUri = GrafanaUri(Uri::from_str(grafana_url.as_str()).unwrap());
+    let deploy_url: DeployUri = DeployUri(Uri::from_str(deploy_url.as_str()).unwrap());
 
     HttpServer::new(move || {
         let cors = Cors::default()
