@@ -39,11 +39,11 @@ struct NoErrors {
     status: String,
 }
 
-#[derive(Debug, Serialize)]
-enum DashboardResponse {
-    Grafana(Grafana),
-    Dash(Dash),
-}
+//#[derive(Debug, Serialize)]
+//enum DashboardResponse {
+//    Grafana(Grafana),
+//    Dash(Dash),
+//}
 
 #[derive(Debug, Serialize)]
 struct UrlResponse {
@@ -51,15 +51,15 @@ struct UrlResponse {
     status: String,
 }
 
-impl Responder for DashboardResponse {
-    type Body = actix_web::body::BoxBody;
-    fn respond_to(self, _: &actix_web::HttpRequest) -> HttpResponse {
-        match self {
-            DashboardResponse::Grafana(grafana_json) => HttpResponse::Ok().json(grafana_json),
-            DashboardResponse::Dash(dash_json) => HttpResponse::Ok().json(dash_json),
-        }
-    }
-}
+//impl Responder for DashboardResponse {
+//    type Body = actix_web::body::BoxBody;
+//    fn respond_to(self, _: &actix_web::HttpRequest) -> HttpResponse {
+//        match self {
+//            DashboardResponse::Grafana(grafana_json) => HttpResponse::Ok().json(grafana_json),
+//            DashboardResponse::Dash(dash_json) => HttpResponse::Ok().json(dash_json),
+//        }
+//    }
+//}
 
 async fn fetch_grafana_model(
     client: &Client,
@@ -68,7 +68,16 @@ async fn fetch_grafana_model(
 ) -> Result<serde_json::Value, GeneralError> {
     log::info!("Fetching Grafana model from {}...", uri);
     let response = client.post(uri).send_json(grafana_json).await;
+
+    if let Err(e) = response {
+        log::error!("Error fetching Grafana model: {}", e);
+        return Err(GeneralError::new(
+            "Error fetching Grafana model".to_string(),
+        ));
+    }
+
     let mut response = response.unwrap();
+
     if response.status().is_success() {
         let body = response.json::<serde_json::Value>().await.unwrap();
         Ok(body)
@@ -94,7 +103,14 @@ async fn deploy(
         .timeout(Duration::new(60 * 5, 0))
         .send_json(&payload)
         .await;
+
+    if let Err(e) = response {
+        log::error!("Error deploying dashboard: {}", e);
+        return Err(GeneralError::new("Error deploying dashboard".to_string()));
+    }
+
     let mut response = response.unwrap();
+
     if response.status().is_success() {
         Ok(String::from_utf8(response.body().await.unwrap().to_vec()).unwrap())
     } else {
@@ -271,7 +287,7 @@ async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
     let mut grafana_url =
-        std::env::var("GRAFANA_URL").unwrap_or("http://localhost:9000".to_string());
+        std::env::var("GRAFANA_URL").unwrap_or("http://localhost:9005".to_string());
     let mut deploy_url = std::env::var("DEPLOY_URL").unwrap_or("http://localhost:9001".to_string());
 
     grafana_url.push('/');

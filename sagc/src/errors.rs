@@ -45,6 +45,7 @@ pub enum LanguageErrorKind {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
 pub enum CompileError {
     WebPos(WebErrorPosition),
     General(GeneralError),
