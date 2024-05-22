@@ -47,6 +47,7 @@ struct DashGeoMap {
     source: String,
     data: Vec<String>,
     name: String,
+    area: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -229,6 +230,7 @@ impl From<GeoMap<'_>> for DashGeoMap {
             source: value.source.to_string(),
             data: value.data.iter().map(|f| f.to_string()).collect(),
             name: value.label.to_string(),
+            area: value.area.map(|f| f.to_string()),
         }
     }
 }
