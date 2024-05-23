@@ -1,6 +1,9 @@
 use actix_web::{error, web::Json};
 use serde::Serialize;
-use std::{fmt::Debug, usize};
+use std::{
+    fmt::{Debug, Display},
+    usize,
+};
 
 use crate::parser::Position;
 
@@ -41,6 +44,19 @@ pub enum LanguageErrorKind {
     InvalidPanelType(String),
 }
 
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum CompileError {
+    WebPos(WebErrorPosition),
+    General(GeneralError),
+}
+
+#[derive(Debug, Serialize)]
+pub struct GeneralError {
+    status: String,
+    error: String,
+}
+
 // new
 #[derive(Serialize, Debug)]
 pub struct WebErrorPosition {
@@ -48,16 +64,18 @@ pub struct WebErrorPosition {
     pub errors: Vec<SagError>,
 }
 
-impl ToString for LanguageErrorKind {
-    fn to_string(&self) -> String {
+impl Display for LanguageErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            LanguageErrorKind::InvalidType() => "Invalid type".to_string(),
-            LanguageErrorKind::MissingField(field) => format!("Missing field '{}'", field),
-            LanguageErrorKind::InvalidValue(value) => format!("Invalid value '{}'", value),
-            LanguageErrorKind::Generic(error) => error.to_string(),
-            LanguageErrorKind::MissingSection(section) => format!("Missing section '{}'", section),
+            LanguageErrorKind::InvalidType() => write!(f, "Invalid type"),
+            LanguageErrorKind::MissingField(field) => write!(f, "Missing field '{}'", field),
+            LanguageErrorKind::InvalidValue(value) => write!(f, "Invalid value '{}'", value),
+            LanguageErrorKind::Generic(error) => write!(f, "{}", error),
+            LanguageErrorKind::MissingSection(section) => {
+                write!(f, "Missing section '{}'", section)
+            }
             LanguageErrorKind::InvalidPanelType(panel) => {
-                format!("Unsupported panel type '{}'", panel)
+                write!(f, "Unsupported panel type '{}'", panel)
             }
         }
     }
@@ -114,6 +132,15 @@ impl LanguageError {
     }
 }
 
+impl GeneralError {
+    pub fn new(error: String) -> Self {
+        GeneralError {
+            status: "error".to_string(),
+            error,
+        }
+    }
+}
+
 // impl std::error::Error
 
 impl std::error::Error for ParsingError {}
@@ -122,7 +149,7 @@ impl std::error::Error for SagError {}
 
 // impl std::fmt::Display
 
-impl core::fmt::Display for SagError {
+impl Display for SagError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             SagError::LanguageError(e) => write!(f, "{}", e),
@@ -133,7 +160,7 @@ impl core::fmt::Display for SagError {
 }
 
 // new
-impl core::fmt::Display for ParsingError {
+impl Display for ParsingError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(
             f,
@@ -143,7 +170,7 @@ impl core::fmt::Display for ParsingError {
     }
 }
 
-impl core::fmt::Display for LanguageError {
+impl Display for LanguageError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(
             f,
@@ -154,9 +181,24 @@ impl core::fmt::Display for LanguageError {
 }
 
 // new
-impl core::fmt::Display for WebErrorPosition {
+impl Display for WebErrorPosition {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+impl Display for GeneralError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Display for CompileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            CompileError::WebPos(e) => write!(f, "{}", e),
+            CompileError::General(e) => write!(f, "{}", e),
+        }
     }
 }
 
@@ -187,6 +229,18 @@ impl Debug for ParsingError {
 
 // new
 impl error::ResponseError for WebErrorPosition {
+    fn error_response(&self) -> actix_web::HttpResponse {
+        actix_web::HttpResponse::Ok().json(Json(self))
+    }
+}
+
+impl error::ResponseError for GeneralError {
+    fn error_response(&self) -> actix_web::HttpResponse {
+        actix_web::HttpResponse::Ok().json(Json(self))
+    }
+}
+
+impl error::ResponseError for CompileError {
     fn error_response(&self) -> actix_web::HttpResponse {
         actix_web::HttpResponse::Ok().json(Json(self))
     }
