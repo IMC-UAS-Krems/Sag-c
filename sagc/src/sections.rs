@@ -83,6 +83,7 @@ pub enum SourceType {
 #[derive(Debug)]
 pub struct Application<'a> {
     pub r#type: ApplicationType,
+    pub dashboard: DashboardType,
     pub layout: Layout,
     pub roles: Vec<&'a str>,
     pub panels: HashMap<&'a str, PanelTypeUnion<'a>>, // called 'visualizations' for Dash, e.g. <name>: <visualization>
@@ -94,6 +95,12 @@ pub enum ApplicationType {
     Mobile,
     Desktop,
     Server,
+}
+
+#[derive(Debug)]
+pub enum DashboardType {
+    Dash,
+    Grafana,
 }
 
 #[derive(Debug)]
@@ -308,6 +315,12 @@ impl<'a> Config<'a> {
     //    }
     //    Ok(())
     //}
+    pub fn filter_panels<F>(&mut self, filter: F)
+    where
+        F: Fn(&PanelTypeUnion) -> bool,
+    {
+        self.application.panels.retain(|_, panel| filter(panel));
+    }
 }
 
 impl<'a> Service<'a> {
@@ -584,6 +597,7 @@ impl<'a> Application<'a> {
     ) -> Result<
         (
             ApplicationType,
+            DashboardType,
             Layout,
             Vec<&'a str>,
             (Vec<&'a str>, Position),
@@ -614,6 +628,7 @@ impl<'a> Application<'a> {
             return Err(errors);
         }
         let r#type = parse!(block, &str, SECTION_NAME, "type");
+        let dashboard = parse!(block, &str, SECTION_NAME, "dashboard");
         let layout = parse!(block, &str, SECTION_NAME, "layout");
         let roles = parse!(block, Vec<&str>, SECTION_NAME, "roles");
         let panels = parse!(block, Vec<&str>, SECTION_NAME, "panels");
@@ -624,6 +639,21 @@ impl<'a> Application<'a> {
                     errors.push(SagError::language_error(
                         LanguageErrorKind::InvalidValue(r#type.to_string()),
                         r#type_pos,
+                    ));
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let dashboard: Option<DashboardType> = match dashboard {
+            Ok((dashboard, dashboard_pos)) => DashboardType::from_str(dashboard)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(dashboard.to_string()),
+                        dashboard_pos,
                     ));
                 })
                 .ok(),
@@ -669,6 +699,7 @@ impl<'a> Application<'a> {
 
         Ok((
             r#type.unwrap(),
+            dashboard.unwrap(),
             layout.unwrap(),
             roles.unwrap(),
             panels.unwrap(),
@@ -676,7 +707,7 @@ impl<'a> Application<'a> {
     }
 
     fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
-        let (r#type, layout, roles, panels) = Application::check(blocks)?;
+        let (r#type, dashboard, layout, roles, panels) = Application::check(blocks)?;
         let mut errors = Vec::new();
 
         let mut panels_map = HashMap::new();
@@ -684,22 +715,56 @@ impl<'a> Application<'a> {
         for panel_name in panels.0 {
             let panel = PanelTypeUnion::new(blocks, panel_name, panels.1);
             if let Err(e) = panel {
-                errors.extend(e.into_iter());
+                errors.extend(e);
             } else {
                 panels_map.insert(panel_name, panel.unwrap());
             }
         }
-
         if !errors.is_empty() {
             return Err(errors);
         }
 
+        Application::check_panels(&panels_map, &dashboard, &panels.1)?;
+
         Ok(Application {
             r#type,
+            dashboard,
             layout,
             roles,
             panels: panels_map,
         })
+    }
+
+    fn check_panels(
+        panels: &HashMap<&str, PanelTypeUnion>,
+        dashboard: &DashboardType,
+        position: &Position,
+    ) -> Result<(), Vec<SagError>> {
+        let mut errors = Vec::new();
+        match dashboard {
+            DashboardType::Dash => {
+                for panel in panels.values() {
+                    if !matches!(
+                        panel,
+                        PanelTypeUnion::PieChart(_)
+                            | PanelTypeUnion::TimeSeries(_)
+                            | PanelTypeUnion::BarChart(_)
+                            | PanelTypeUnion::GeoMap(_)
+                            | PanelTypeUnion::XYChart(_)
+                    ) {
+                        errors.push(SagError::language_error(
+                            LanguageErrorKind::InvalidPanelType(panel.to_string()),
+                            *position,
+                        ));
+                    }
+                }
+                if !errors.is_empty() {
+                    return Err(errors);
+                }
+                return Ok(());
+            }
+            DashboardType::Grafana => return Ok(()),
+        }
     }
 }
 
@@ -796,7 +861,7 @@ impl<'a> GeoMap<'a> {
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let data = parse!(block, Vec<&str>, block_name, "data");
-        let area = parse!(block, Option<&str>, block_name, "label");
+        let area = parse!(block, Option<&str>, block_name, "area");
 
         let label = match label {
             Ok((label, _)) => Some(label),
@@ -1835,6 +1900,17 @@ impl FromStr for ApplicationType {
     }
 }
 
+impl FromStr for DashboardType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Dash" => Ok(DashboardType::Dash),
+            "Grafana" => Ok(DashboardType::Grafana),
+            _ => Err(format!("invalid dashboard type: {}", s)),
+        }
+    }
+}
+
 impl FromStr for Layout {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -1942,6 +2018,15 @@ impl ToString for ApplicationType {
             ApplicationType::Mobile => String::from("Mobile"),
             ApplicationType::Desktop => String::from("Desktop"),
             ApplicationType::Server => String::from("Server"),
+        }
+    }
+}
+
+impl ToString for DashboardType {
+    fn to_string(&self) -> String {
+        match self {
+            DashboardType::Dash => String::from("Dash"),
+            DashboardType::Grafana => String::from("Grafana"),
         }
     }
 }
