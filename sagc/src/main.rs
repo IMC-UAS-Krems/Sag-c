@@ -4,7 +4,7 @@ use std::time::Duration;
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::web::{self, Json};
-use actix_web::{get, post, App, HttpResponse, HttpServer, Responder, Result};
+use actix_web::{get, post, App, HttpServer, Responder, Result};
 use awc::http::Uri;
 use awc::Client;
 use rand::seq::IteratorRandom;
@@ -211,8 +211,8 @@ async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosi
 }
 
 #[post("/dash")]
-async fn dash(input: String) -> Result<impl Responder, WebErrorPosition> {
-    let result = parse_input(input.as_str());
+async fn dash(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
+    let result = parse_input(input.source.as_str());
 
     if let Ok(dash) = result {
         let dash: Dash = Dash::from(dash);
