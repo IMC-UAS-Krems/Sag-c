@@ -1,6 +1,6 @@
 use crate::sections::{
-    Application, BarChart, Config, Deployment, Environment, GeoMap, PanelTypeUnion, PieChart,
-    Service, TimeSeries, Version, XYChart,
+    Application, BarChart, Config, DatasourceConfig, Deployment, Environment, GeoMap,
+    PanelTypeUnion, PieChart, Service, TimeSeries, Version, XYChart,
 };
 
 use serde::Serialize;
@@ -27,6 +27,14 @@ struct DashDatasource {
     query: DashQuery,
     #[serde(rename = "type")]
     datasource_type: String,
+    config: Option<DatasourceConfigDash>,
+}
+
+#[derive(Debug, Serialize)]
+struct DatasourceConfigDash {
+    company: usize,
+    measurement: usize,
+    token: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -187,6 +195,7 @@ impl<'a> From<Config<'a>> for Dash {
                         select: traces.iter().map(|s| s.to_string()).collect(),
                     },
                     datasource_type: datasource.r#type.to_string(),
+                    config: datasource.config.map(|f| f.into()),
                 };
                 (name.to_string(), grafana_datasource)
             })
@@ -219,6 +228,16 @@ impl From<Version> for DashVersion {
             major: val.major,
             minor: val.minor,
             patch: val.patch,
+        }
+    }
+}
+
+impl<'a> From<DatasourceConfig<'a>> for DatasourceConfigDash {
+    fn from(val: DatasourceConfig) -> Self {
+        DatasourceConfigDash {
+            company: val.company,
+            measurement: val.measurement,
+            token: val.token.to_string(),
         }
     }
 }

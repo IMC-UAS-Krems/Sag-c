@@ -10,6 +10,7 @@ use crate::errors::LanguageErrorKind;
 use crate::errors::SagError;
 use crate::parse;
 use crate::parser::Blocks;
+use crate::parser::ParseResult;
 use crate::parser::Position;
 use crate::parser::Value;
 
@@ -66,18 +67,26 @@ pub struct Datasource<'a> {
     pub r#type: SourceType,
     pub uri: Url,
     pub query: &'a str,
+    pub config: Option<DatasourceConfig<'a>>,
 }
 
 #[derive(Debug)]
 pub enum Provider {
     Fiware,
-    Siemens,
+    Dataskop,
 }
 
 #[derive(Debug)]
 pub enum SourceType {
     SmartMeter,
     Sensor,
+}
+
+#[derive(Debug)]
+pub struct DatasourceConfig<'a> {
+    pub company: usize,
+    pub measurement: usize,
+    pub token: &'a str,
 }
 
 #[derive(Debug)]
@@ -481,7 +490,16 @@ impl<'a> Datasource<'a> {
         blocks: &Blocks<'a>,
         source_name: &'a str,
         source_name_position: Position,
-    ) -> Result<(Provider, SourceType, Url, &'a str), Vec<SagError>> {
+    ) -> Result<
+        (
+            Provider,
+            SourceType,
+            Url,
+            &'a str,
+            Option<DatasourceConfig<'a>>,
+        ),
+        Vec<SagError>,
+    > {
         let mut errors = Vec::new();
 
         let datasource = blocks.get(source_name).ok_or(SagError::language_error(
@@ -508,6 +526,7 @@ impl<'a> Datasource<'a> {
         let r#type = parse!(datasource, &str, source_name, "type");
         let uri = parse!(datasource, &str, source_name, "uri");
         let query = parse!(datasource, &str, source_name, "query");
+        let config = DatasourceConfig::new(datasource);
 
         let provider: Option<Provider> = match provider {
             Ok((provider, provider_pos)) => Provider::from_str(provider)
@@ -562,6 +581,23 @@ impl<'a> Datasource<'a> {
             }
         };
 
+        let config: Option<DatasourceConfig<'a>> = match (config, &provider) {
+            (Ok(config), None) => config,
+            (Ok(config), Some(Provider::Fiware)) => config,
+            (Ok(Some(config)), Some(Provider::Dataskop)) => Some(config),
+            (Ok(None), Some(Provider::Dataskop)) => {
+                errors.push(SagError::language_error(
+                    LanguageErrorKind::MissingSection("config".to_string()),
+                    source_name_position,
+                ));
+                None
+            }
+            (Err(e), _) => {
+                errors.extend(e);
+                None
+            }
+        };
+
         if !errors.is_empty() {
             return Err(errors);
         }
@@ -571,6 +607,7 @@ impl<'a> Datasource<'a> {
             r#type.unwrap(),
             uri.unwrap(),
             query.unwrap(),
+            config,
         ))
     }
 
@@ -579,7 +616,7 @@ impl<'a> Datasource<'a> {
         source_name: &'a str,
         source_name_position: Position,
     ) -> Result<Self, Vec<SagError>> {
-        let (provider, r#type, uri, query) =
+        let (provider, r#type, uri, query, config) =
             Datasource::check(blocks, source_name, source_name_position)?;
 
         Ok(Datasource {
@@ -587,7 +624,91 @@ impl<'a> Datasource<'a> {
             r#type,
             uri,
             query,
+            config,
         })
+    }
+}
+
+impl<'a> DatasourceConfig<'a> {
+    fn check(
+        datasource: &ParseResult<'a>,
+    ) -> Result<Option<(usize, usize, &'a str)>, Vec<SagError>> {
+        let mut errors = Vec::new();
+        const SECTION_NAME: &str = "config";
+
+        let block = match &datasource.value {
+            Value::Block(block) => block,
+            _ => unreachable!(),
+        };
+
+        let block = block.get(SECTION_NAME);
+
+        if block.is_none() {
+            return Ok(None);
+        }
+
+        let block = block.unwrap();
+
+        if !block.value.is_block() {
+            errors.push(SagError::language_error(
+                LanguageErrorKind::InvalidType(),
+                block.position,
+            ));
+            return Err(errors);
+        }
+
+        let company = parse!(block, usize, SECTION_NAME, "company");
+        let measurement = parse!(block, usize, SECTION_NAME, "measurement");
+        let token = parse!(block, &str, SECTION_NAME, "token");
+
+        let company: Option<usize> = match company {
+            Ok((company, _)) => Some(company),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let measurement: Option<usize> = match measurement {
+            Ok((measurement, _)) => Some(measurement),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let token: Option<&str> = match token {
+            Ok((token, _)) => Some(token),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok(Some((
+            company.unwrap(),
+            measurement.unwrap(),
+            token.unwrap(),
+        )))
+    }
+
+    fn new(block: &ParseResult<'a>) -> Result<Option<Self>, Vec<SagError>> {
+        let result = DatasourceConfig::check(block);
+        if let Err(e) = result {
+            return Err(e);
+        }
+        if let Some((company, measurement, token)) = result.unwrap() {
+            return Ok(Some(DatasourceConfig {
+                company,
+                measurement,
+                token,
+            }));
+        }
+        return Ok(None);
     }
 }
 
@@ -1881,7 +2002,7 @@ impl FromStr for Provider {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "Fiware" => Ok(Provider::Fiware),
-            "Siemens" => Ok(Provider::Siemens),
+            "Dataskop" => Ok(Provider::Dataskop),
             _ => Err(format!("invalid provider: {}", s)),
         }
     }
@@ -2006,7 +2127,7 @@ impl ToString for Provider {
     fn to_string(&self) -> String {
         match self {
             Provider::Fiware => String::from("Fiware"),
-            Provider::Siemens => String::from("Siemens"),
+            Provider::Dataskop => String::from("Siemens"),
         }
     }
 }
@@ -2131,7 +2252,7 @@ impl<'a> From<Provider> for &'a str {
     fn from(p: Provider) -> &'a str {
         match p {
             Provider::Fiware => "Fiware",
-            Provider::Siemens => "Siemens",
+            Provider::Dataskop => "Siemens",
         }
     }
 }
