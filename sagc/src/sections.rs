@@ -588,7 +588,7 @@ impl<'a> Datasource<'a> {
             (Ok(None), Some(Provider::Dataskop)) => {
                 errors.push(SagError::language_error(
                     LanguageErrorKind::MissingSection("config".to_string()),
-                    source_name_position,
+                    datasource.position,
                 ));
                 None
             }
