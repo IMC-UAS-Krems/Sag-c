@@ -88,7 +88,9 @@ impl<'a> TryInto<usize> for &Value<'a> {
     type Error = &'a str;
     fn try_into(self) -> Result<usize, Self::Error> {
         match self {
-            Value::String(value) => Ok(value.parse().unwrap()),
+            Value::String(value) => value
+                .parse()
+                .map_err(|_| "value is specified in a wrong format"),
             _ => Err("value is specified in a wrong format"),
         }
     }
