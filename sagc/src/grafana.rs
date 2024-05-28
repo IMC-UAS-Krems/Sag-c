@@ -1,7 +1,7 @@
 use crate::sections::{
-    Application, BarChart, Config, Datasource, Deployment, Environment, GeoMap, GrafanaCalendar,
-    GrafanaExtValues, GrafanaMap, GrafanaMultiLine, GrafanaSingleLine, PanelTypeUnion, PieChart,
-    Service, TimeSeries, Version, XYChart,
+    Application, BarChart, Config, Datasource, DatasourceConfig, Deployment, Environment, GeoMap,
+    GrafanaCalendar, GrafanaExtValues, GrafanaMap, GrafanaMultiLine, GrafanaSingleLine,
+    PanelTypeUnion, PieChart, Service, TimeSeries, Version, XYChart,
 };
 
 use serde::Serialize;
@@ -37,6 +37,14 @@ struct GrafanaDatasource {
     query: String,
     #[serde(rename = "type")]
     datasource_type: String,
+    config: Option<GrafanaDatasourceConfig>,
+}
+
+#[derive(Debug, Serialize)]
+struct GrafanaDatasourceConfig {
+    company: usize,
+    measurement: usize,
+    token: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -204,6 +212,17 @@ impl<'a> From<Datasource<'a>> for GrafanaDatasource {
             uri: val.uri,
             query: val.query.to_string(),
             datasource_type: val.r#type.to_string(),
+            config: val.config.map(|c| c.into()),
+        }
+    }
+}
+
+impl<'a> From<DatasourceConfig<'a>> for GrafanaDatasourceConfig {
+    fn from(val: DatasourceConfig) -> Self {
+        GrafanaDatasourceConfig {
+            company: val.company,
+            measurement: val.measurement,
+            token: val.token.to_string(),
         }
     }
 }
