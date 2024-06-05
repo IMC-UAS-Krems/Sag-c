@@ -22,9 +22,10 @@ macro_rules! parse {
         }
     };
     ($map:expr, $fty:ty, $block_name:expr, $field_name:expr) => {
-        match &$map.value {
-            Value::Block(block) => match block.get($field_name) {
+        match &mut $map.value {
+            Value::Block(block) => match block.get_mut($field_name) {
                 Some(field) => {
+                    field.accessed = true;
                     let result: Result<$fty, _> = TryInto::<$fty>::try_into(&field.value);
                     result
                         .map_err(|_| {

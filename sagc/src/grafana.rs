@@ -43,7 +43,7 @@ struct GrafanaDatasource {
 #[derive(Debug, Serialize)]
 struct GrafanaDatasourceConfig {
     company: usize,
-    measurement: usize,
+    measurements: HashMap<usize, String>,
     token: String,
 }
 
@@ -232,7 +232,11 @@ impl<'a> From<DatasourceConfig<'a>> for GrafanaDatasourceConfig {
     fn from(val: DatasourceConfig) -> Self {
         GrafanaDatasourceConfig {
             company: val.company,
-            measurement: val.measurement,
+            measurements: val
+                .measurements
+                .into_iter()
+                .map(|(k, v)| (k, v.to_string()))
+                .collect(),
             token: val.token.to_string(),
         }
     }

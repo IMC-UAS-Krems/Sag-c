@@ -33,7 +33,7 @@ struct DashDatasource {
 #[derive(Debug, Serialize)]
 struct DatasourceConfigDash {
     company: usize,
-    measurement: usize,
+    measurements: HashMap<usize, String>,
     token: String,
 }
 
@@ -236,7 +236,11 @@ impl<'a> From<DatasourceConfig<'a>> for DatasourceConfigDash {
     fn from(val: DatasourceConfig) -> Self {
         DatasourceConfigDash {
             company: val.company,
-            measurement: val.measurement,
+            measurements: val
+                .measurements
+                .into_iter()
+                .map(|(k, v)| (k, v.to_string()))
+                .collect(),
             token: val.token.to_string(),
         }
     }

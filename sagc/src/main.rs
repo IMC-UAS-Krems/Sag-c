@@ -39,27 +39,11 @@ struct NoErrors {
     status: String,
 }
 
-//#[derive(Debug, Serialize)]
-//enum DashboardResponse {
-//    Grafana(Grafana),
-//    Dash(Dash),
-//}
-
 #[derive(Debug, Serialize)]
 struct UrlResponse {
     url: String,
     status: String,
 }
-
-//impl Responder for DashboardResponse {
-//    type Body = actix_web::body::BoxBody;
-//    fn respond_to(self, _: &actix_web::HttpRequest) -> HttpResponse {
-//        match self {
-//            DashboardResponse::Grafana(grafana_json) => HttpResponse::Ok().json(grafana_json),
-//            DashboardResponse::Dash(dash_json) => HttpResponse::Ok().json(dash_json),
-//        }
-//    }
-//}
 
 async fn fetch_grafana_model(
     client: &Client,

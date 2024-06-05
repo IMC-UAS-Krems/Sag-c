@@ -3,7 +3,9 @@ use nom::character::complete::i16;
 use nom::multi::separated_list1;
 use nom::IResult;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::str::FromStr;
+use std::usize;
 use url::Url;
 
 use crate::errors::LanguageErrorKind;
@@ -85,7 +87,7 @@ pub enum SourceType {
 #[derive(Debug)]
 pub struct DatasourceConfig<'a> {
     pub company: usize,
-    pub measurement: usize,
+    pub measurements: HashMap<usize, &'a str>,
     pub token: &'a str,
 }
 
@@ -261,13 +263,13 @@ pub enum EnvironmentType {
 }
 
 impl<'a> Config<'a> {
-    pub fn new(blocks: Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let mut errors = Vec::new();
 
-        let application = Application::new(&blocks);
-        let service = Service::new(&blocks);
-        let data = SagData::new(&blocks);
-        let deployment = Deployment::new(&blocks);
+        let application = Application::new(blocks);
+        let service = Service::new(blocks);
+        let data = SagData::new(blocks);
+        let deployment = Deployment::new(blocks);
 
         let service = match service {
             Ok(service) => Some(service),
@@ -343,12 +345,12 @@ impl<'a> Config<'a> {
 }
 
 impl<'a> Service<'a> {
-    fn check(blocks: &Blocks<'a>) -> Result<(&'a str, Scope, Version), Vec<SagError>> {
+    fn check(blocks: &mut Blocks<'a>) -> Result<(&'a str, Scope, Version), Vec<SagError>> {
         const SECTION_NAME: &str = "service";
         let mut errors = Vec::new();
 
         let block = blocks
-            .get(SECTION_NAME)
+            .get_mut(SECTION_NAME)
             .ok_or(SagError::internal_error(format!(
                 "Missing section {}",
                 SECTION_NAME
@@ -368,6 +370,8 @@ impl<'a> Service<'a> {
             ));
             return Err(errors);
         }
+
+        block.accessed = true;
 
         let title = parse!(block, &str, SECTION_NAME, "title");
         let scope = parse!(block, &str, SECTION_NAME, "scope");
@@ -418,7 +422,7 @@ impl<'a> Service<'a> {
         Ok((title.unwrap(), scope.unwrap(), version.unwrap()))
     }
 
-    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let (title, scope, version) = Service::check(blocks)?;
 
         Ok(Service {
@@ -430,12 +434,12 @@ impl<'a> Service<'a> {
 }
 
 impl<'a> SagData<'a> {
-    fn check(blocks: &Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
+    fn check(blocks: &mut Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
         const SECTION_NAME: &str = "data";
         let mut errors = Vec::new();
 
         let data = blocks
-            .get(SECTION_NAME)
+            .get_mut(SECTION_NAME)
             .ok_or(SagError::internal_error(format!(
                 "Missing section {}",
                 SECTION_NAME
@@ -456,6 +460,8 @@ impl<'a> SagData<'a> {
             return Err(errors);
         }
 
+        data.accessed = true;
+
         let data_sources = parse!(data, Vec<&str>, SECTION_NAME, "sources");
         if let Err(e) = data_sources {
             errors.push(e);
@@ -467,7 +473,7 @@ impl<'a> SagData<'a> {
         Ok(data_sources)
     }
 
-    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         const SECTION_NAME: &str = "data";
 
         let mut errors = Vec::new();
@@ -497,7 +503,7 @@ impl<'a> SagData<'a> {
 
 impl<'a> Datasource<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         source_name: &'a str,
         source_name_position: Position,
     ) -> Result<
@@ -512,7 +518,7 @@ impl<'a> Datasource<'a> {
     > {
         let mut errors = Vec::new();
 
-        let datasource = blocks.get(source_name).ok_or(SagError::language_error(
+        let datasource = blocks.get_mut(source_name).ok_or(SagError::language_error(
             LanguageErrorKind::MissingSection(source_name.to_string()),
             source_name_position,
         ));
@@ -531,6 +537,8 @@ impl<'a> Datasource<'a> {
             ));
             return Err(errors);
         }
+
+        datasource.accessed = true;
 
         let provider = parse!(datasource, &str, source_name, "provider");
         let r#type = parse!(datasource, &str, source_name, "type");
@@ -622,7 +630,7 @@ impl<'a> Datasource<'a> {
     }
 
     fn new(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         source_name: &'a str,
         source_name_position: Position,
     ) -> Result<Self, Vec<SagError>> {
@@ -641,17 +649,17 @@ impl<'a> Datasource<'a> {
 
 impl<'a> DatasourceConfig<'a> {
     fn check(
-        datasource: &ParseResult<'a>,
-    ) -> Result<Option<(usize, usize, &'a str)>, Vec<SagError>> {
+        datasource: &mut ParseResult<'a>,
+    ) -> Result<Option<(usize, HashMap<usize, &'a str>, &'a str)>, Vec<SagError>> {
         let mut errors = Vec::new();
         const SECTION_NAME: &str = "config";
 
-        let block = match &datasource.value {
+        let block = match &mut datasource.value {
             Value::Block(block) => block,
             _ => unreachable!(),
         };
 
-        let block = block.get(SECTION_NAME);
+        let block = block.get_mut(SECTION_NAME);
 
         if block.is_none() {
             return Ok(None);
@@ -667,8 +675,10 @@ impl<'a> DatasourceConfig<'a> {
             return Err(errors);
         }
 
+        block.accessed = true;
+
         let company = parse!(block, usize, SECTION_NAME, "company");
-        let measurement = parse!(block, usize, SECTION_NAME, "measurement");
+        let measurement = parse!(block, HashMap<usize, &str>, SECTION_NAME, "measurements");
         let token = parse!(block, &str, SECTION_NAME, "token");
 
         let company: Option<usize> = match company {
@@ -679,7 +689,7 @@ impl<'a> DatasourceConfig<'a> {
             }
         };
 
-        let measurement: Option<usize> = match measurement {
+        let measurement: Option<HashMap<usize, &str>> = match measurement {
             Ok((measurement, _)) => Some(measurement),
             Err(e) => {
                 errors.push(e);
@@ -706,25 +716,22 @@ impl<'a> DatasourceConfig<'a> {
         )))
     }
 
-    fn new(block: &ParseResult<'a>) -> Result<Option<Self>, Vec<SagError>> {
-        let result = DatasourceConfig::check(block);
-        if let Err(e) = result {
-            return Err(e);
-        }
-        if let Some((company, measurement, token)) = result.unwrap() {
+    fn new(block: &mut ParseResult<'a>) -> Result<Option<Self>, Vec<SagError>> {
+        let result = DatasourceConfig::check(block)?;
+        if let Some((company, measurements, token)) = result {
             return Ok(Some(DatasourceConfig {
                 company,
-                measurement,
+                measurements,
                 token,
             }));
         }
-        return Ok(None);
+        Ok(None)
     }
 }
 
 impl<'a> Application<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
     ) -> Result<
         (
             ApplicationType,
@@ -739,7 +746,7 @@ impl<'a> Application<'a> {
         let mut errors = Vec::new();
 
         let block = blocks
-            .get(SECTION_NAME)
+            .get_mut(SECTION_NAME)
             .ok_or(SagError::internal_error(format!(
                 "Missing section {}",
                 SECTION_NAME
@@ -758,6 +765,9 @@ impl<'a> Application<'a> {
             ));
             return Err(errors);
         }
+
+        block.accessed = true;
+
         let r#type = parse!(block, &str, SECTION_NAME, "type");
         let dashboard = parse!(block, &str, SECTION_NAME, "dashboard");
         let layout = parse!(block, &str, SECTION_NAME, "layout");
@@ -837,7 +847,7 @@ impl<'a> Application<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let (r#type, dashboard, layout, roles, panels) = Application::check(blocks)?;
         let mut errors = Vec::new();
 
@@ -892,16 +902,16 @@ impl<'a> Application<'a> {
                 if !errors.is_empty() {
                     return Err(errors);
                 }
-                return Ok(());
+                Ok(())
             }
-            DashboardType::Grafana => return Ok(()),
+            DashboardType::Grafana => Ok(()),
         }
     }
 }
 
 impl<'a> PanelTypeUnion<'a> {
     fn check(
-        blocks: &'a Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
         block_ref_position: Position,
     ) -> Result<PanelType, Vec<SagError>> {
@@ -926,11 +936,16 @@ impl<'a> PanelTypeUnion<'a> {
             ));
             return Err(errors);
         }
+
+        block.accessed = true;
+
         let panel_type = parse!(block, &str, block_name, "type");
+
         if let Err(e) = panel_type {
             errors.push(e);
             return Err(errors);
         }
+
         let panel_type = panel_type.unwrap();
         let panel_type = PanelType::from_str(panel_type.0).map_err(|_| {
             SagError::language_error(
@@ -946,7 +961,7 @@ impl<'a> PanelTypeUnion<'a> {
     }
 
     fn new(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
         block_ref_position: Position,
     ) -> Result<Self, Vec<SagError>> {
@@ -985,12 +1000,15 @@ impl<'a> PanelTypeUnion<'a> {
 
 impl<'a> GeoMap<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
 
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        block.accessed = true;
+
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1047,7 +1065,7 @@ impl<'a> GeoMap<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, data, area) = GeoMap::check(blocks, block_name)?;
 
         Ok(GeoMap {
@@ -1062,11 +1080,13 @@ impl<'a> GeoMap<'a> {
 
 impl<'a> GrafanaMap<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        block.accessed = true;
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1110,7 +1130,7 @@ impl<'a> GrafanaMap<'a> {
         Ok((r#type.unwrap(), source.unwrap(), traces.unwrap()))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, traces) = GrafanaMap::check(blocks, block_name)?;
 
         Ok(GrafanaMap {
@@ -1123,7 +1143,7 @@ impl<'a> GrafanaMap<'a> {
 
 impl<'a> PieChart<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<
         (
@@ -1136,7 +1156,9 @@ impl<'a> PieChart<'a> {
         Vec<SagError>,
     > {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        block.accessed = true;
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1208,7 +1230,7 @@ impl<'a> PieChart<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces, pie_chart_type) = PieChart::check(blocks, block_name)?;
 
         Ok(PieChart {
@@ -1223,11 +1245,13 @@ impl<'a> PieChart<'a> {
 
 impl<'a> BarChart<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        block.accessed = true;
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1282,7 +1306,7 @@ impl<'a> BarChart<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces) = BarChart::check(blocks, block_name)?;
 
         Ok(BarChart {
@@ -1296,11 +1320,13 @@ impl<'a> BarChart<'a> {
 
 impl<'a> TimeSeries<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        block.accessed = true;
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1355,7 +1381,7 @@ impl<'a> TimeSeries<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces) = TimeSeries::check(blocks, block_name)?;
 
         Ok(TimeSeries {
@@ -1369,11 +1395,13 @@ impl<'a> TimeSeries<'a> {
 
 impl<'a> XYChart<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        block.accessed = true;
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1428,7 +1456,7 @@ impl<'a> XYChart<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces) = XYChart::check(blocks, block_name)?;
 
         Ok(XYChart {
@@ -1442,11 +1470,13 @@ impl<'a> XYChart<'a> {
 
 impl<'a> GrafanaSingleLine<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        block.accessed = true;
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1490,7 +1520,7 @@ impl<'a> GrafanaSingleLine<'a> {
         Ok((r#type.unwrap(), source.unwrap(), traces.unwrap()))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, traces) = GrafanaSingleLine::check(blocks, block_name)?;
 
         Ok(GrafanaSingleLine {
@@ -1503,11 +1533,13 @@ impl<'a> GrafanaSingleLine<'a> {
 
 impl<'a> GrafanaMultiLine<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        block.accessed = true;
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1565,7 +1597,7 @@ impl<'a> GrafanaMultiLine<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaMultiLine::check(blocks, block_name)?;
 
         Ok(GrafanaMultiLine {
@@ -1579,11 +1611,13 @@ impl<'a> GrafanaMultiLine<'a> {
 
 impl<'a> GrafanaExtValues<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        block.accessed = true;
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1641,7 +1675,7 @@ impl<'a> GrafanaExtValues<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaExtValues::check(blocks, block_name)?;
 
         Ok(GrafanaExtValues {
@@ -1655,11 +1689,13 @@ impl<'a> GrafanaExtValues<'a> {
 
 impl<'a> GrafanaCalendar<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        block.accessed = true;
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1717,7 +1753,7 @@ impl<'a> GrafanaCalendar<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaCalendar::check(blocks, block_name)?;
 
         Ok(GrafanaCalendar {
@@ -1730,12 +1766,12 @@ impl<'a> GrafanaCalendar<'a> {
 }
 
 impl<'a> Deployment<'a> {
-    fn check(blocks: &Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
+    fn check(blocks: &mut Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
         const SECTION_NAME: &str = "deployment";
         let mut errors = Vec::new();
 
         let block = blocks
-            .get(SECTION_NAME)
+            .get_mut(SECTION_NAME)
             .ok_or(SagError::internal_error(format!(
                 "Missing section {SECTION_NAME}"
             )));
@@ -1754,6 +1790,8 @@ impl<'a> Deployment<'a> {
             return Err(errors);
         }
 
+        block.accessed = true;
+
         let environments = parse!(block, Vec<&str>, SECTION_NAME, "environments");
 
         if let Err(e) = environments {
@@ -1764,7 +1802,7 @@ impl<'a> Deployment<'a> {
         Ok(environments.unwrap())
     }
 
-    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let environments = Deployment::check(blocks)?;
         let mut errors = Vec::new();
 
@@ -1790,13 +1828,13 @@ impl<'a> Deployment<'a> {
 
 impl<'a> Environment<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
         block_ref_pos: Position,
     ) -> Result<(&'a str, i32, EnvironmentType), Vec<SagError>> {
         let mut errors = Vec::new();
 
-        let block = blocks.get(block_name).ok_or(SagError::language_error(
+        let block = blocks.get_mut(block_name).ok_or(SagError::language_error(
             LanguageErrorKind::MissingSection(block_name.to_string()),
             block_ref_pos,
         ));
@@ -1815,6 +1853,8 @@ impl<'a> Environment<'a> {
             ));
             return Err(errors);
         }
+
+        block.accessed = true;
 
         let uri = parse!(block, &str, block_name, "uri");
         let port = parse!(block, &str, block_name, "port");
@@ -1867,7 +1907,7 @@ impl<'a> Environment<'a> {
     }
 
     fn new(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
         block_ref_pos: Position,
     ) -> Result<Self, Vec<SagError>> {
@@ -2181,94 +2221,94 @@ impl FromStr for EnvironmentType {
 
 // ToString implementations
 
-impl ToString for Version {
-    fn to_string(&self) -> String {
-        format!("{}.{}.{}", self.major, self.minor, self.patch)
+impl Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
     }
 }
 
-impl ToString for Scope {
-    fn to_string(&self) -> String {
+impl Display for Scope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Scope::Service => String::from("service"),
-            Scope::Industry => String::from("industry"),
-            Scope::Manifacturing => String::from("manifacturing"),
-            Scope::Education => String::from("education"),
-            Scope::Healthcare => String::from("healthcare"),
-            Scope::SocialPrograms => String::from("social_programs"),
-            Scope::Government => String::from("government"),
-            Scope::Energy => String::from("energy"),
-            Scope::Water => String::from("water"),
-            Scope::Environment => String::from("environment"),
-            Scope::Transportation => String::from("transportation"),
-            Scope::Communication => String::from("communication"),
-            Scope::PublicSafety => String::from("public_safety"),
-            Scope::UrbanPlanning => String::from("urban_planning"),
-            Scope::Infrastructure => String::from("infrastructure"),
+            Scope::Service => write!(f, "service"),
+            Scope::Industry => write!(f, "industry"),
+            Scope::Manifacturing => write!(f, "manifacturing"),
+            Scope::Education => write!(f, "education"),
+            Scope::Healthcare => write!(f, "healthcare"),
+            Scope::SocialPrograms => write!(f, "social_programs"),
+            Scope::Government => write!(f, "government"),
+            Scope::Energy => write!(f, "energy"),
+            Scope::Water => write!(f, "water"),
+            Scope::Environment => write!(f, "environment"),
+            Scope::Transportation => write!(f, "transportation"),
+            Scope::Communication => write!(f, "communication"),
+            Scope::PublicSafety => write!(f, "public_safety"),
+            Scope::UrbanPlanning => write!(f, "urban_planning"),
+            Scope::Infrastructure => write!(f, "infrastructure"),
         }
     }
 }
 
-impl ToString for SourceType {
-    fn to_string(&self) -> String {
+impl Display for SourceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SourceType::SmartMeter => String::from("SmartMeter"),
-            SourceType::Sensor => String::from("Sensor"),
+            SourceType::SmartMeter => write!(f, "SmartMeter"),
+            SourceType::Sensor => write!(f, "Sensor"),
         }
     }
 }
 
-impl ToString for Provider {
-    fn to_string(&self) -> String {
+impl Display for Provider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Provider::Fiware => String::from("Fiware"),
-            Provider::Dataskop => String::from("Siemens"),
+            Provider::Fiware => write!(f, "Fiware"),
+            Provider::Dataskop => write!(f, "Siemens"),
         }
     }
 }
 
-impl ToString for ApplicationType {
-    fn to_string(&self) -> String {
+impl Display for ApplicationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ApplicationType::Web => String::from("Web"),
-            ApplicationType::Mobile => String::from("Mobile"),
-            ApplicationType::Desktop => String::from("Desktop"),
-            ApplicationType::Server => String::from("Server"),
+            ApplicationType::Web => write!(f, "Web"),
+            ApplicationType::Mobile => write!(f, "Mobile"),
+            ApplicationType::Desktop => write!(f, "Desktop"),
+            ApplicationType::Server => write!(f, "Server"),
         }
     }
 }
 
-impl ToString for DashboardType {
-    fn to_string(&self) -> String {
+impl Display for DashboardType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DashboardType::Dash => String::from("Dash"),
-            DashboardType::Grafana => String::from("Grafana"),
+            DashboardType::Dash => write!(f, "Dash"),
+            DashboardType::Grafana => write!(f, "Grafana"),
         }
     }
 }
 
-impl ToString for Layout {
-    fn to_string(&self) -> String {
+impl Display for Layout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Layout::Horizontal => String::from("Horizontal"),
-            Layout::Vertical => String::from("Vertical"),
-            Layout::SinglePage => String::from("SinglePage"),
+            Layout::Horizontal => write!(f, "Horizontal"),
+            Layout::Vertical => write!(f, "Vertical"),
+            Layout::SinglePage => write!(f, "SinglePage"),
         }
     }
 }
 
-impl ToString for PanelTypeUnion<'_> {
-    fn to_string(&self) -> String {
+impl Display for PanelTypeUnion<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PanelTypeUnion::PieChart(_) => String::from("pie_chart"),
-            PanelTypeUnion::TimeSeries(_) => String::from("timeseries"),
-            PanelTypeUnion::BarChart(_) => String::from("bar_chart"),
-            PanelTypeUnion::GeoMap(_) => String::from("geomap"),
-            PanelTypeUnion::XYChart(_) => String::from("xy_chart"),
-            PanelTypeUnion::GrafanaMap(_) => String::from("smartcomm-map-panel"),
-            PanelTypeUnion::GrafanaSingleLine(_) => String::from("smartcomm-simpleline-panel"),
+            PanelTypeUnion::PieChart(_) => write!(f, "pie_chart"),
+            PanelTypeUnion::TimeSeries(_) => write!(f, "timeseries"),
+            PanelTypeUnion::BarChart(_) => write!(f, "bar_chart"),
+            PanelTypeUnion::GeoMap(_) => write!(f, "geomap"),
+            PanelTypeUnion::XYChart(_) => write!(f, "xy_chart"),
+            PanelTypeUnion::GrafanaMap(_) => write!(f, "smartcomm-map-panel"),
+            PanelTypeUnion::GrafanaSingleLine(_) => write!(f, "smartcomm-simpleline-panel"),
             PanelTypeUnion::GrafanaMultiLine(_) => {
-                String::from("smartcomm-multiplelinechart-panel")
+                write!(f, "smartcomm-multiplelinechart-panel")
             }
             PanelTypeUnion::GrafanaExtValues(_) => String::from("smartcomm-extremevalues-panel"),
             PanelTypeUnion::GrafanaCalendar(_) => String::from("smartcomm-calendar-panel"),
@@ -2277,8 +2317,8 @@ impl ToString for PanelTypeUnion<'_> {
     }
 }
 
-impl ToString for PanelType {
-    fn to_string(&self) -> String {
+impl Display for PanelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PanelType::PieChart => String::from("pie_chart"),
             PanelType::TimeSeries => String::from("timeseries"),
@@ -2295,19 +2335,19 @@ impl ToString for PanelType {
     }
 }
 
-impl ToString for PieChartType {
-    fn to_string(&self) -> String {
+impl Display for PieChartType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PieChartType::Pie => String::from("pie"),
-            PieChartType::Donut => String::from("donut"),
+            PieChartType::Pie => write!(f, "pie"),
+            PieChartType::Donut => write!(f, "donut"),
         }
     }
 }
 
-impl ToString for EnvironmentType {
-    fn to_string(&self) -> String {
+impl Display for EnvironmentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EnvironmentType::Docker => String::from("Docker"),
+            EnvironmentType::Docker => write!(f, "Docker"),
         }
     }
 }

@@ -14,6 +14,7 @@ use nom::{
 use nom_locate::LocatedSpan;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
+use std::usize;
 
 type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;
 type IResultVec<'a> = nom::IResult<Span<'a>, Vec<Token<'a>>>;
@@ -53,11 +54,16 @@ struct Token<'a> {
 pub struct ParseResult<'a> {
     pub position: Position, // NOTE: in case of a block, position is the position of the block name
     pub value: Value<'a>,
+    pub accessed: bool,
 }
 
 impl ParseResult<'_> {
     fn new(position: Position, value: Value<'_>) -> ParseResult<'_> {
-        ParseResult { position, value }
+        ParseResult {
+            position,
+            value,
+            accessed: false,
+        }
     }
 }
 
@@ -101,6 +107,27 @@ impl<'a> TryInto<Vec<&'a str>> for &Value<'a> {
     fn try_into(self) -> Result<Vec<&'a str>, Self::Error> {
         match self {
             Value::Vec(value) => Ok(value.to_vec()),
+            _ => Err("value is specified in a wrong format"),
+        }
+    }
+}
+
+impl<'a> TryInto<HashMap<usize, &'a str>> for &Value<'a> {
+    type Error = &'a str;
+    fn try_into(self) -> Result<HashMap<usize, &'a str>, Self::Error> {
+        match self {
+            Value::Block(value) => {
+                let mut new_value = HashMap::new();
+                for (k, v) in value.iter() {
+                    let number = k
+                        .parse::<usize>()
+                        .map_err(|_| "value is specified in a wrong format")?;
+                    let v = &v.value;
+                    let string: &'a str = v.try_into()?;
+                    new_value.insert(number, string);
+                }
+                Ok(new_value)
+            }
             _ => Err("value is specified in a wrong format"),
         }
     }
@@ -170,7 +197,7 @@ fn parse_section_name(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
-    recognize(many1_count(alt((alpha1, tag("_")))))(input).map(|(input, result)| {
+    recognize(many1_count(alt((alphanumeric1, tag("_")))))(input).map(|(input, result)| {
         let position = Position {
             row_start: line,
             row_end: line,
@@ -340,6 +367,8 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut errors = Vec::new();
     let mut last_indent = 0;
     let mut last_block_indent = 0;
+    // first indent in any section should be `last_block_indent` + 1
+    let mut first_field_indent = true;
 
     // input = seek_to_input(input);
 
@@ -385,6 +414,7 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
         if let Ok((i, result)) = parse_block_name(input) {
             input = i;
             last_block_indent = last_indent;
+            first_field_indent = true;
             tokens.push(result);
             if input.is_empty() {
                 break;
@@ -395,12 +425,16 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
         let result = parse_section_line(input);
         match result {
             Ok((i, token)) => {
-                if last_indent <= last_block_indent {
+                if last_indent == 0
+                    || last_indent - last_block_indent > 1
+                    || first_field_indent && last_indent - last_block_indent != 1
+                {
                     let (i, token) = handle_error(input, TokenValue::IndentError).unwrap();
                     input = i;
                     errors.push(token);
                     continue;
                 }
+                first_field_indent = false;
                 input = i;
                 tokens.extend(token);
             }
@@ -533,15 +567,26 @@ fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
     }
 }
 
+fn check_used_fields(blocks: &Blocks<'_>) {
+    for (k, v) in blocks.iter() {
+        if let Value::Block(b) = &v.value {
+            check_used_fields(b);
+        }
+        if !v.accessed {
+            log::warn!("Field {} is not used", k);
+        }
+    }
+}
+
 pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
-    let blocks = match parse_lines(input) {
+    let mut blocks = match parse_lines(input) {
         Ok(blocks) => blocks,
         Err(e) => {
             return Err(e);
         }
     };
 
-    let config = match Config::new(blocks) {
+    let config = match Config::new(&mut blocks) {
         Ok(config) => config,
         Err(e) => {
             return Err(e
@@ -550,6 +595,8 @@ pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
                 .collect());
         }
     };
+    //dbg!(&blocks);
+    check_used_fields(&blocks);
 
     Ok(config)
 }

@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(clippy::type_complexity)]
 pub mod dash;
 pub mod errors;
 pub mod grafana;
