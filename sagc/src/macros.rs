@@ -3,10 +3,10 @@
 /// parse!(`HashMap`, `type`, `section_name`, `field_name`)
 macro_rules! parse {
     ($map:expr, Option<$fty:ty>, $block_name:expr, $field_name:expr) => {
-        match &$map.value {
-            Value::Block(block) => match block.get($field_name) {
+        match &mut $map.value {
+            Value::Block(block) => match block.get_mut($field_name) {
                 Some(field) => Some(
-                    TryInto::<$fty>::try_into(&field.value)
+                    TryInto::<$fty>::try_into(&mut field.value)
                         .map_err(|_| {
                             SagError::language_error(
                                 LanguageErrorKind::InvalidType(),
@@ -25,8 +25,7 @@ macro_rules! parse {
         match &mut $map.value {
             Value::Block(block) => match block.get_mut($field_name) {
                 Some(field) => {
-                    field.accessed = true;
-                    let result: Result<$fty, _> = TryInto::<$fty>::try_into(&field.value);
+                    let result: Result<$fty, _> = TryInto::<$fty>::try_into(&mut field.value);
                     result
                         .map_err(|_| {
                             SagError::language_error(

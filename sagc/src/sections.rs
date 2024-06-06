@@ -371,8 +371,6 @@ impl<'a> Service<'a> {
             return Err(errors);
         }
 
-        block.accessed = true;
-
         let title = parse!(block, &str, SECTION_NAME, "title");
         let scope = parse!(block, &str, SECTION_NAME, "scope");
         let version = parse!(block, &str, SECTION_NAME, "version");
@@ -460,8 +458,6 @@ impl<'a> SagData<'a> {
             return Err(errors);
         }
 
-        data.accessed = true;
-
         let data_sources = parse!(data, Vec<&str>, SECTION_NAME, "sources");
         if let Err(e) = data_sources {
             errors.push(e);
@@ -537,8 +533,6 @@ impl<'a> Datasource<'a> {
             ));
             return Err(errors);
         }
-
-        datasource.accessed = true;
 
         let provider = parse!(datasource, &str, source_name, "provider");
         let r#type = parse!(datasource, &str, source_name, "type");
@@ -675,8 +669,6 @@ impl<'a> DatasourceConfig<'a> {
             return Err(errors);
         }
 
-        block.accessed = true;
-
         let company = parse!(block, usize, SECTION_NAME, "company");
         let measurement = parse!(block, HashMap<usize, &str>, SECTION_NAME, "measurements");
         let token = parse!(block, &str, SECTION_NAME, "token");
@@ -765,8 +757,6 @@ impl<'a> Application<'a> {
             ));
             return Err(errors);
         }
-
-        block.accessed = true;
 
         let r#type = parse!(block, &str, SECTION_NAME, "type");
         let dashboard = parse!(block, &str, SECTION_NAME, "dashboard");
@@ -937,8 +927,6 @@ impl<'a> PanelTypeUnion<'a> {
             return Err(errors);
         }
 
-        block.accessed = true;
-
         let panel_type = parse!(block, &str, block_name, "type");
 
         if let Err(e) = panel_type {
@@ -1006,8 +994,6 @@ impl<'a> GeoMap<'a> {
         let mut errors = Vec::new();
 
         let block = blocks.get_mut(block_name).unwrap();
-
-        block.accessed = true;
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1086,8 +1072,6 @@ impl<'a> GrafanaMap<'a> {
         let mut errors = Vec::new();
         let block = blocks.get_mut(block_name).unwrap();
 
-        block.accessed = true;
-
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
@@ -1157,8 +1141,6 @@ impl<'a> PieChart<'a> {
     > {
         let mut errors = Vec::new();
         let block = blocks.get_mut(block_name).unwrap();
-
-        block.accessed = true;
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1251,8 +1233,6 @@ impl<'a> BarChart<'a> {
         let mut errors = Vec::new();
         let block = blocks.get_mut(block_name).unwrap();
 
-        block.accessed = true;
-
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1325,8 +1305,6 @@ impl<'a> TimeSeries<'a> {
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
         let block = blocks.get_mut(block_name).unwrap();
-
-        block.accessed = true;
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1401,8 +1379,6 @@ impl<'a> XYChart<'a> {
         let mut errors = Vec::new();
         let block = blocks.get_mut(block_name).unwrap();
 
-        block.accessed = true;
-
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1476,8 +1452,6 @@ impl<'a> GrafanaSingleLine<'a> {
         let mut errors = Vec::new();
         let block = blocks.get_mut(block_name).unwrap();
 
-        block.accessed = true;
-
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let traces = parse!(block, Vec<&str>, block_name, "traces");
@@ -1538,8 +1512,6 @@ impl<'a> GrafanaMultiLine<'a> {
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
         let block = blocks.get_mut(block_name).unwrap();
-
-        block.accessed = true;
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1617,8 +1589,6 @@ impl<'a> GrafanaExtValues<'a> {
         let mut errors = Vec::new();
         let block = blocks.get_mut(block_name).unwrap();
 
-        block.accessed = true;
-
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
         let locations = parse!(block, Vec<&str>, block_name, "locations");
@@ -1694,8 +1664,6 @@ impl<'a> GrafanaCalendar<'a> {
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
         let block = blocks.get_mut(block_name).unwrap();
-
-        block.accessed = true;
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1790,8 +1758,6 @@ impl<'a> Deployment<'a> {
             return Err(errors);
         }
 
-        block.accessed = true;
-
         let environments = parse!(block, Vec<&str>, SECTION_NAME, "environments");
 
         if let Err(e) = environments {
@@ -1853,8 +1819,6 @@ impl<'a> Environment<'a> {
             ));
             return Err(errors);
         }
-
-        block.accessed = true;
 
         let uri = parse!(block, &str, block_name, "uri");
         let port = parse!(block, &str, block_name, "port");
