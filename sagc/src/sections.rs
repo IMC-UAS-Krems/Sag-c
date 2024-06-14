@@ -898,7 +898,7 @@ impl<'a> PanelTypeUnion<'a> {
         let mut errors = Vec::new();
 
         let block = blocks.get(block_name).ok_or(SagError::language_error(
-            LanguageErrorKind::MissingSection(block_name.to_string()),
+            LanguageErrorKind::IncorrectPanelName(block_name.to_string()),
             block_ref_position,
         ));
 
