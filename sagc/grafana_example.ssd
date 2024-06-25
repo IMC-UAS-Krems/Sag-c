@@ -20,7 +20,7 @@ application:
     dashboard is Grafana
     layout is SinglePage
     roles -> User, SuperUser, Admin
-    panels -> Map, Pie, XY, TS, Bar, SCMapPanel, SingleLine, MultiLine, ExtremeValues, Calendar
+    panels -> Map, Pie, XY, TS, Bar, SCMapPanel, SingleLine, MultiLine, ExtremeValues, Calendar, BnB
 
 Map:
     label is map
@@ -80,6 +80,12 @@ Calendar:
     source is first
     locations -> Escuelas Aguirre, Arturo Soria, Villaverde
     traces -> dateObserved, CO, NO, NOx, O3
+
+BnB:
+    type is smartcomm-bars-and-bubbles
+    source is first
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
+    traces -> dateObserved, NOx, O3, NO2
 
 deployment:
     environments -> local
