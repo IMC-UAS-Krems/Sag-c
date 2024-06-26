@@ -34,7 +34,7 @@ struct GrafanaVersion {
 struct GrafanaDatasource {
     provider: String,
     uri: Url,
-    query: String,
+    query: Option<String>,
     #[serde(rename = "type")]
     datasource_type: String,
     config: Option<GrafanaDatasourceConfig>,
@@ -43,7 +43,7 @@ struct GrafanaDatasource {
 #[derive(Debug, Serialize)]
 struct GrafanaDatasourceConfig {
     company: usize,
-    measurements: HashMap<usize, String>,
+    measurements: HashMap<String, usize>,
     token: String,
 }
 
@@ -138,6 +138,15 @@ struct Calendar {
 }
 
 #[derive(Debug, Serialize)]
+struct BulletGraph {
+    #[serde(rename = "type")]
+    chart_type: String,
+    source: String,
+    traces: Vec<String>,
+    locations: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
 struct ExtValues {
     #[serde(rename = "type")]
     chart_type: String,
@@ -221,7 +230,7 @@ impl<'a> From<Datasource<'a>> for GrafanaDatasource {
         GrafanaDatasource {
             provider: val.provider.to_string(),
             uri: val.uri,
-            query: val.query.to_string(),
+            query: val.query.map(|q| q.to_string()),
             datasource_type: val.r#type.to_string(),
             config: val.config.map(|c| c.into()),
         }
@@ -235,7 +244,7 @@ impl<'a> From<DatasourceConfig<'a>> for GrafanaDatasourceConfig {
             measurements: val
                 .measurements
                 .into_iter()
-                .map(|(k, v)| (k, v.to_string()))
+                .map(|(k, v)| (v.to_string(), k))
                 .collect(),
             token: val.token.to_string(),
         }
@@ -357,6 +366,17 @@ impl<'a> From<GrafanaCalendar<'a>> for Calendar {
     }
 }
 
+impl<'a> From<GrafanaBulletGraph<'a>> for BulletGraph {
+    fn from(value: GrafanaBulletGraph<'a>) -> Self {
+        BulletGraph {
+            chart_type: value.r#type.to_string(),
+            source: value.source.to_string(),
+            traces: value.traces.iter().map(|f| f.to_string()).collect(),
+            locations: value.locations.iter().map(|f| f.to_string()).collect(),
+        }
+    }
+}
+
 impl<'a> From<Application<'a>> for GrafanaApplication {
     fn from(value: Application<'a>) -> Self {
         GrafanaApplication {
@@ -379,7 +399,9 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         }
                         PanelTypeUnion::GeoMap(geo_map) => GrafanaPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => GrafanaPanel::XYChart(xy_chart.into()),
-                        PanelTypeUnion::GrafanaMap(_) => GrafanaPanel::NotSupported,
+                        PanelTypeUnion::GrafanaMap(geomap) => {
+                            GrafanaPanel::GrafanaMap(geomap.into())
+                        }
                         PanelTypeUnion::GrafanaSingleLine(g_sline) => {
                             GrafanaPanel::GrafanaSingleLine(g_sline.into())
                         }

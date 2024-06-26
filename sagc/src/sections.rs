@@ -68,7 +68,7 @@ pub struct Datasource<'a> {
     pub provider: Provider,
     pub r#type: SourceType,
     pub uri: Url,
-    pub query: &'a str,
+    pub query: Option<&'a str>,
     pub config: Option<DatasourceConfig<'a>>,
 }
 
@@ -507,7 +507,7 @@ impl<'a> Datasource<'a> {
             Provider,
             SourceType,
             Url,
-            &'a str,
+            Option<&'a str>,
             Option<DatasourceConfig<'a>>,
         ),
         Vec<SagError>,
@@ -537,7 +537,7 @@ impl<'a> Datasource<'a> {
         let provider = parse!(datasource, &str, source_name, "provider");
         let r#type = parse!(datasource, &str, source_name, "type");
         let uri = parse!(datasource, &str, source_name, "uri");
-        let query = parse!(datasource, &str, source_name, "query");
+        let query = parse!(datasource, Option<&str>, source_name, "query");
         let config = DatasourceConfig::new(datasource);
 
         let provider: Option<Provider> = match provider {
@@ -586,11 +586,17 @@ impl<'a> Datasource<'a> {
         };
 
         let query: Option<&str> = match query {
-            Ok((query, _)) => Some(query),
-            Err(e) => {
-                errors.push(e);
-                None
-            }
+            Some((query, _)) => Some(query),
+            None => match provider {
+                Some(Provider::Fiware) => {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::MissingSection("query".to_string()),
+                        datasource.position,
+                    ));
+                    None
+                }
+                _ => None,
+            },
         };
 
         let config: Option<DatasourceConfig<'a>> = match (config, &provider) {
@@ -618,7 +624,7 @@ impl<'a> Datasource<'a> {
             provider.unwrap(),
             r#type.unwrap(),
             uri.unwrap(),
-            query.unwrap(),
+            query,
             config,
         ))
     }
@@ -1733,6 +1739,84 @@ impl<'a> GrafanaCalendar<'a> {
     }
 }
 
+//GrafanaBulletGraph
+impl<'a> GrafanaBulletGraph<'a> {
+    fn check(
+        blocks: &mut Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        let r#type = parse!(block, &str, block_name, "type");
+        let source = parse!(block, &str, block_name, "source");
+        let locations = parse!(block, Vec<&str>, block_name, "locations");
+        let traces = parse!(block, Vec<&str>, block_name, "traces");
+
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let locations = match locations {
+            Ok((locations, _)) => Some(locations),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            r#type.unwrap(),
+            source.unwrap(),
+            locations.unwrap(),
+            traces.unwrap(),
+        ))
+    }
+
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        dbg!("GrafanaBulletGraph::new");
+        let (r#type, source, locations, traces) = GrafanaBulletGraph::check(blocks, block_name)?;
+
+        Ok(GrafanaBulletGraph {
+            r#type,
+            source,
+            locations,
+            traces,
+        })
+    }
+}
+
 impl<'a> Deployment<'a> {
     fn check(blocks: &mut Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
         const SECTION_NAME: &str = "deployment";
@@ -2226,7 +2310,7 @@ impl Display for Provider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Provider::Fiware => write!(f, "Fiware"),
-            Provider::Dataskop => write!(f, "Siemens"),
+            Provider::Dataskop => write!(f, "Dataskop"),
         }
     }
 }

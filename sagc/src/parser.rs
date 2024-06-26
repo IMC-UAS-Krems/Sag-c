@@ -1,20 +1,19 @@
 use crate::{errors::SagError, sections::Config};
 use nom::bytes::complete::{tag, take_while};
-use nom::character::complete::{line_ending, space1};
+use nom::character::complete::line_ending;
 use nom::error::context;
 use nom::multi::many0;
 use nom::sequence::delimited;
 use nom::{
     branch::alt,
-    character::complete::{alpha1, alphanumeric1, space0},
     combinator::{map_res, recognize, verify},
     multi::{many1_count, separated_list0},
     sequence::terminated,
 };
 use nom_locate::LocatedSpan;
+use nom_unicode::complete::{alpha1, alphanumeric1, space0, space1};
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
-use std::usize;
 
 type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;
 type IResultVec<'a> = nom::IResult<Span<'a>, Vec<Token<'a>>>;
@@ -322,7 +321,12 @@ fn parse_vec(input: Span) -> IResult {
 
     separated_list0(
         alt((tag(", "), tag(","))),
-        recognize(many1_count(alt((alphanumeric1, space1, tag("."))))),
+        recognize(many1_count(alt((
+            alphanumeric1,
+            //space1, NOTE: this gives error on the separator `, `
+            tag("."),
+            tag("_"),
+        )))),
     )(input)
     .map(|(input, result)| {
         let position = Position {
@@ -512,6 +516,7 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
                 tokens.extend(token);
             }
             Err(nom::Err::Error(e)) => {
+                dbg!(&e.input);
                 let (i, token) = handle_error(e.input, TokenValue::UnparsableError).unwrap();
                 input = i;
                 errors.push(token);

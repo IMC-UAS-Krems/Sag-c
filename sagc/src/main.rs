@@ -51,7 +51,11 @@ async fn fetch_grafana_model(
     grafana_json: &Grafana,
 ) -> Result<serde_json::Value, GeneralError> {
     log::info!("Fetching Grafana model from {}...", uri);
-    let response = client.post(uri).send_json(grafana_json).await;
+    let response = client
+        .post(uri)
+        .timeout(Duration::new(60 * 5, 0))
+        .send_json(grafana_json)
+        .await;
 
     if let Err(e) = response {
         log::error!("Error fetching Grafana model: {}", e);
@@ -64,6 +68,7 @@ async fn fetch_grafana_model(
 
     if response.status().is_success() {
         let body = response.json::<serde_json::Value>().await.unwrap();
+        log::debug!("{}", &body.to_string());
         Ok(body)
     } else {
         log::error!(
@@ -135,6 +140,7 @@ async fn compile(
 
     if let Ok(config) = result {
         // dbg!(&grafana);
+        dbg!(&config);
         let dashboard_type = match config.application.dashboard {
             DashboardType::Grafana => "grafana",
             DashboardType::Dash => "dash",
