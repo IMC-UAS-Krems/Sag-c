@@ -42,6 +42,7 @@ pub enum LanguageErrorKind {
     Generic(String),
     MissingSection(String),
     InvalidPanelType(String),
+    IncorrectPanelName(String),
 }
 
 #[derive(Debug, Serialize)]
@@ -71,6 +72,7 @@ impl Display for LanguageErrorKind {
             LanguageErrorKind::MissingField(field) => write!(f, "Missing field '{}'", field),
             LanguageErrorKind::InvalidValue(value) => write!(f, "Invalid value '{}'", value),
             LanguageErrorKind::Generic(error) => write!(f, "{}", error),
+            LanguageErrorKind::IncorrectPanelName(name) => write!(f,"Undefined or misspelled panel variable '{}'",name),
             LanguageErrorKind::MissingSection(section) => {
                 write!(f, "Missing section '{}'", section)
             }
