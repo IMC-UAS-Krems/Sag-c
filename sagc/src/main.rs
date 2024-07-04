@@ -99,9 +99,13 @@ async fn deploy(
     }
 
     let mut response = response.unwrap();
+    let resp_url = String::from_utf8(response.body().await.unwrap().to_vec())
+        .unwrap()
+        .replace('"', "");
+    log::debug!("{}", &resp_url);
 
     if response.status().is_success() {
-        Ok(String::from_utf8(response.body().await.unwrap().to_vec()).unwrap())
+        Ok(resp_url)
     } else {
         log::error!(
             "Error ({}): {}",
