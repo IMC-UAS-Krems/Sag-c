@@ -1,6 +1,6 @@
 use crate::{errors::SagError, sections::Config};
 use nom::bytes::complete::{tag, take_while};
-use nom::character::complete::line_ending;
+use nom::character::complete::{line_ending, space0, space1};
 use nom::error::context;
 use nom::multi::many0;
 use nom::sequence::delimited;
@@ -11,7 +11,7 @@ use nom::{
     sequence::terminated,
 };
 use nom_locate::LocatedSpan;
-use nom_unicode::complete::{alpha1, alphanumeric1, space0, space1};
+use nom_unicode::complete::{alpha1, alphanumeric1};
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 
@@ -323,7 +323,7 @@ fn parse_vec(input: Span) -> IResult {
         alt((tag(", "), tag(","))),
         recognize(many1_count(alt((
             alphanumeric1,
-            //space1, NOTE: this gives error on the separator `, `
+            space1, // NOTE: this gives error on the separator `, `
             tag("."),
             tag("_"),
         )))),
