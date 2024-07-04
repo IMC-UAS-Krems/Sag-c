@@ -157,7 +157,7 @@ struct ExtValues {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(tag = "type")]
+#[serde(untagged)]
 enum GrafanaPanel {
     #[serde(rename = "pie_chart")]
     PieChart(GrafanaPieChart),
