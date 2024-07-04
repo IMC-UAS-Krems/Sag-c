@@ -179,7 +179,7 @@ enum GrafanaPanel {
     GrafanaExtValues(ExtValues),
     #[serde(rename = "smartcomm-calendar-panel")]
     GrafanaCalendar(Calendar),
-    #[serde(rename = "smartcomm-bars-and-bubbles")]
+    #[serde(rename = "smartcomm-minmaxbarchart-panel")]
     GrafanaBnB(BnB),
     #[serde(rename = "smartcomm-bulletgraph-panel")]
     BulletGraph(BulletGraph),

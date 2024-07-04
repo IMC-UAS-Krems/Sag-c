@@ -2255,7 +2255,7 @@ impl FromStr for PanelType {
             "smartcomm-multiplelinechart-panel" => Ok(PanelType::GrafanaMultiLine),
             "smartcomm-extremevalues-panel" => Ok(PanelType::GrafanaExtValues),
             "smartcomm-calendar-panel" => Ok(PanelType::GrafanaCalendar),
-            "smartcomm-bars-and-bubbles" => Ok(PanelType::GrafanaBnB),
+            "smartcomm-minmaxbarchart-panel" => Ok(PanelType::GrafanaBnB),
             "smartcomm-bulletgraph-panel" => Ok(PanelType::GrafanaBulletGraph),
             _ => Err(format!("invalid panel type: {}", input)),
         }
@@ -2376,7 +2376,7 @@ impl Display for PanelTypeUnion<'_> {
             }
             PanelTypeUnion::GrafanaExtValues(_) => write!(f, "smartcomm-extremevalues-panel"),
             PanelTypeUnion::GrafanaCalendar(_) => write!(f, "smartcomm-calendar-panel"),
-            PanelTypeUnion::GrafanaBnB(_) => write!(f, "smartcomm-bars-and-bubbles"),
+            PanelTypeUnion::GrafanaBnB(_) => write!(f, "smartcomm-minmaxbarchart-panel"),
             PanelTypeUnion::GrafanaBulletGraph(_) => write!(f, "smartcomm-bulletgraph-panel"),
         }
     }
@@ -2395,7 +2395,7 @@ impl Display for PanelType {
             PanelType::GrafanaMultiLine => write!(f, "smartcomm-multiplelinechart-panel"),
             PanelType::GrafanaExtValues => write!(f, "smartcomm-extremevalues-panel"),
             PanelType::GrafanaCalendar => write!(f, "smartcomm-calendar-panel"),
-            PanelType::GrafanaBnB => write!(f, "smartcomm-bars-and-bubbles"),
+            PanelType::GrafanaBnB => write!(f, "smartcomm-minmaxbarchart-panel"),
             PanelType::GrafanaBulletGraph => write!(f, "smartcomm-bulletgraph-panel"),
         }
     }
@@ -2494,7 +2494,7 @@ impl<'a> From<PanelTypeUnion<'a>> for &'a str {
             PanelTypeUnion::GrafanaMultiLine(_) => "smartcomm-multiplelinechart-panel",
             PanelTypeUnion::GrafanaExtValues(_) => "smartcomm-extremevalues-panel",
             PanelTypeUnion::GrafanaCalendar(_) => "smartcomm-calendar-panel",
-            PanelTypeUnion::GrafanaBnB(_) => "smartcomm-bars-and-bubbles",
+            PanelTypeUnion::GrafanaBnB(_) => "smartcomm-minmaxbarchart-panel",
             PanelTypeUnion::GrafanaBulletGraph(_) => "smartcomm-bulletgraph-panel",
         }
     }
@@ -2513,7 +2513,7 @@ impl<'a> From<PanelType> for &'a str {
             PanelType::GrafanaMultiLine => "smartcomm-multiplelinechart-panel",
             PanelType::GrafanaExtValues => "smartcomm-extremevalues-panel",
             PanelType::GrafanaCalendar => "smartcomm-calendar-panel",
-            PanelType::GrafanaBnB => "smartcomm-bars-and-bubbles",
+            PanelType::GrafanaBnB => "smartcomm-minmaxbarchart-panel",
             PanelType::GrafanaBulletGraph => "smartcomm-bulletgraph-panel",
         }
     }
