@@ -5,7 +5,6 @@ use nom::IResult;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::str::FromStr;
-use std::usize;
 use url::Url;
 
 use crate::errors::LanguageErrorKind;
@@ -134,6 +133,7 @@ pub enum PanelTypeUnion<'a> {
     GrafanaExtValues(GrafanaExtValues<'a>),
     GrafanaCalendar(GrafanaCalendar<'a>),
     GrafanaBnB(GrafanaBnB<'a>),
+    GrafanaBulletGraph(GrafanaBulletGraph<'a>),
 }
 
 #[derive(Debug)]
@@ -201,6 +201,14 @@ pub struct GrafanaExtValues<'a> {
 
 #[derive(Debug)]
 pub struct GrafanaCalendar<'a> {
+    pub r#type: PanelType,
+    pub source: &'a str,
+    pub locations: Vec<&'a str>,
+    pub traces: Vec<&'a str>,
+}
+
+#[derive(Debug)]
+pub struct GrafanaBulletGraph<'a> {
     pub r#type: PanelType,
     pub source: &'a str,
     pub locations: Vec<&'a str>,
@@ -1967,11 +1975,11 @@ impl<'a> Environment<'a> {
 
 impl<'a> GrafanaBnB<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -2029,7 +2037,7 @@ impl<'a> GrafanaBnB<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaBnB::check(blocks, block_name)?;
 
         Ok(GrafanaBnB {
@@ -2040,7 +2048,6 @@ impl<'a> GrafanaBnB<'a> {
         })
     }
 }
-
 
 // Panel implementation
 
@@ -2065,6 +2072,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaExtValues(gextv) => gextv.source,
             PanelTypeUnion::GrafanaCalendar(gc) => gc.source,
             PanelTypeUnion::GrafanaBnB(bb) => bb.source,
+            PanelTypeUnion::GrafanaBulletGraph(gbg) => gbg.source,
         }
     }
 
@@ -2081,6 +2089,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaExtValues(_) => None,
             PanelTypeUnion::GrafanaCalendar(_) => None,
             PanelTypeUnion::GrafanaBnB(_) => None,
+            PanelTypeUnion::GrafanaBulletGraph(_) => None,
         }
     }
 
@@ -2097,6 +2106,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaExtValues(gextv) => &gextv.traces,
             PanelTypeUnion::GrafanaCalendar(gc) => &gc.traces,
             PanelTypeUnion::GrafanaBnB(bb) => &bb.traces,
+            PanelTypeUnion::GrafanaBulletGraph(gbg) => &gbg.traces,
         }
     }
 
@@ -2113,6 +2123,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaExtValues(gextv) => Some(&gextv.locations),
             PanelTypeUnion::GrafanaCalendar(gc) => Some(&gc.locations),
             PanelTypeUnion::GrafanaBnB(bb) => Some(&bb.locations),
+            PanelTypeUnion::GrafanaBulletGraph(gbg) => Some(&gbg.locations),
         }
     }
 }
@@ -2358,9 +2369,10 @@ impl Display for PanelTypeUnion<'_> {
             PanelTypeUnion::GrafanaMultiLine(_) => {
                 write!(f, "smartcomm-multiplelinechart-panel")
             }
-            PanelTypeUnion::GrafanaExtValues(_) => String::from("smartcomm-extremevalues-panel"),
-            PanelTypeUnion::GrafanaCalendar(_) => String::from("smartcomm-calendar-panel"),
-            PanelTypeUnion::GrafanaBnB(_) => String::from("smartcomm-bars-and-bubbles"),
+            PanelTypeUnion::GrafanaExtValues(_) => write!(f, "smartcomm-extremevalues-panel"),
+            PanelTypeUnion::GrafanaCalendar(_) => write!(f, "smartcomm-calendar-panel"),
+            PanelTypeUnion::GrafanaBnB(_) => write!(f, "smartcomm-bars-and-bubbles"),
+            PanelTypeUnion::GrafanaBulletGraph(_) => write!(f, "smartcomm-bulletgraph-panel"),
         }
     }
 }
@@ -2368,17 +2380,17 @@ impl Display for PanelTypeUnion<'_> {
 impl Display for PanelType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PanelType::PieChart => String::from("pie_chart"),
-            PanelType::TimeSeries => String::from("timeseries"),
-            PanelType::BarChart => String::from("bar_chart"),
-            PanelType::GeoMap => String::from("geomap"),
-            PanelType::XYChart => String::from("xy_chart"),
-            PanelType::GrafanaMap => String::from("smartcomm-map-panel"),
-            PanelType::GrafanaSingleLine => String::from("smartcomm-simpleline-panel"),
-            PanelType::GrafanaMultiLine => String::from("smartcomm-multiplelinechart-panel"),
-            PanelType::GrafanaExtValues => String::from("smartcomm-extremevalues-panel"),
-            PanelType::GrafanaCalendar => String::from("smartcomm-calendar-panel"),
-            PanelType::GrafanaBnB => String::from("smartcomm-bars-and-bubbles"),
+            PanelType::PieChart => write!(f, "pie_chart"),
+            PanelType::TimeSeries => write!(f, "timeseries"),
+            PanelType::BarChart => write!(f, "bar_chart"),
+            PanelType::GeoMap => write!(f, "geomap"),
+            PanelType::XYChart => write!(f, "xy_chart"),
+            PanelType::GrafanaMap => write!(f, "smartcomm-map-panel"),
+            PanelType::GrafanaSingleLine => write!(f, "smartcomm-simpleline-panel"),
+            PanelType::GrafanaMultiLine => write!(f, "smartcomm-multiplelinechart-panel"),
+            PanelType::GrafanaExtValues => write!(f, "smartcomm-extremevalues-panel"),
+            PanelType::GrafanaCalendar => write!(f, "smartcomm-calendar-panel"),
+            PanelType::GrafanaBnB => write!(f, "smartcomm-bars-and-bubbles"),
         }
     }
 }
@@ -2477,6 +2489,7 @@ impl<'a> From<PanelTypeUnion<'a>> for &'a str {
             PanelTypeUnion::GrafanaExtValues(_) => "smartcomm-extremevalues-panel",
             PanelTypeUnion::GrafanaCalendar(_) => "smartcomm-calendar-panel",
             PanelTypeUnion::GrafanaBnB(_) => "smartcomm-bars-and-bubbles",
+            PanelTypeUnion::GrafanaBulletGraph(_) => "smartcomm-bulletgraph-panel",
         }
     }
 }

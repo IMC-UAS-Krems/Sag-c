@@ -1,7 +1,8 @@
 use crate::sections::{
     Application, BarChart, Config, Datasource, DatasourceConfig, Deployment, Environment, GeoMap,
-    GrafanaCalendar, GrafanaExtValues, GrafanaMap, GrafanaMultiLine, GrafanaSingleLine, GrafanaBnB,
-    PanelTypeUnion, PieChart, Service, TimeSeries, Version, XYChart,
+    GrafanaBnB, GrafanaBulletGraph, GrafanaCalendar, GrafanaExtValues, GrafanaMap,
+    GrafanaMultiLine, GrafanaSingleLine, PanelTypeUnion, PieChart, Service, TimeSeries, Version,
+    XYChart,
 };
 
 use serde::Serialize;
@@ -180,6 +181,8 @@ enum GrafanaPanel {
     GrafanaCalendar(Calendar),
     #[serde(rename = "smartcomm-bars-and-bubbles")]
     GrafanaBnB(BnB),
+    #[serde(rename = "smartcomm-bulletgraph-panel")]
+    BulletGraph(BulletGraph),
     NotSupported,
 }
 
@@ -414,8 +417,9 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         PanelTypeUnion::GrafanaCalendar(g_calendar) => {
                             GrafanaPanel::GrafanaCalendar(g_calendar.into())
                         }
-                        PanelTypeUnion::GrafanaBnB(g_bnb) => {
-                            GrafanaPanel::GrafanaBnB(g_bnb.into())
+                        PanelTypeUnion::GrafanaBnB(g_bnb) => GrafanaPanel::GrafanaBnB(g_bnb.into()),
+                        PanelTypeUnion::GrafanaBulletGraph(g_bullet) => {
+                            GrafanaPanel::BulletGraph(g_bullet.into())
                         }
                     };
                     (name.to_string(), grafana_panel)
