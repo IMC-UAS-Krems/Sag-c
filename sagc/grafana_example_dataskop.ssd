@@ -13,14 +13,14 @@ first:
     query is AirQualityObserved
     config:
         measurements:
-            1491 is Würnsdorf_temperature
-            1492 is Würnsdorf_humidity
-            1493 is Würnsdorf_pressure
-            1489 is Würnsdorf_particulates
-            1502 is Fadenbach_temperature
-            1501 is Fadenbach_humidity
-            1503 is Fadenbach_pressure
-            1499 is Fadenbach_particulates
+            1491 is Würnsdorf_Temperatur
+            1492 is Würnsdorf_Luftfeuchtigkeit
+            1493 is Würnsdorf_Luftdruck
+            1489 is Würnsdorf_Feinstaub
+            1502 is Fadenbach_Temperatur
+            1501 is Fadenbach_Luftfeuchtigkeit
+            1503 is Fadenbach_Luftdruck
+            1499 is Fadenbach_Feinstaub
             43 is Fadenbach
             41 is Würnsdorf
             42 is Zelking
@@ -34,68 +34,68 @@ application:
     dashboard is Grafana
     layout is SinglePage
     roles -> User, SuperUser, Admin
-    panels -> TS, Pie, Bar, SingleLine, MultiLine, ExtremeValues, Calendar, Bullet, MapFHSP
+    panels -> XY, Map, TS, Pie, Bar, SingleLine, MultiLine, ExtremeValues, Calendar, Bullet, MapFHSP
 
 
 Map:
     label is map
     type is geomap
     source is first
-    data -> location, stationName, O3, NO2, SO2, address
+    data -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
 
 Pie:
     label is pie
     type is pie_chart
     source is first
-    traces -> Würnsdorf_temperature, Fadenbach_temperature, Würnsdorf_humidity, Fadenbach_humidity
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
     pie_chart_type is pie
 
 XY:
     label is xy
     type is xy_chart
     source is first
-    traces -> dateObserved, NOx, O3, NO2, SO2, id
+    traces -> Würnsdorf_Temperatur, Würnsdorf_Luftfeuchtigkeit
 
 TS:
     label is ts
     type is timeseries
     source is first
-    traces -> Würnsdorf_temperature, Fadenbach_temperature
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur
 
 Bar:
     label is bar
     type is bar_chart
     source is first
-    traces -> Würnsdorf_temperature, Fadenbach_temperature, Würnsdorf_humidity, Fadenbach_humidity
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
 
 SingleLine:
     type is smartcomm-simpleline-panel
     source is first
-    traces -> Würnsdorf_temperature, Fadenbach_temperature, Würnsdorf_humidity, Fadenbach_humidity
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
 
 MultiLine:
     locations -> Wünsdort, Fadenbach
     type is smartcomm-multiplelinechart-panel
     source is first
-    traces -> Würnsdorf_temperature, Fadenbach_temperature, Würnsdorf_humidity, Fadenbach_humidity
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
 
 Bullet:
     locations -> Wünsdort, Fadenbach
     type is smartcomm-bulletgraph-panel
     source is first
-    traces -> Würnsdorf_temperature, Fadenbach_temperature, Würnsdorf_humidity, Fadenbach_humidity
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
 
 ExtremeValues:
     locations -> Wünsdort, Fadenbach
     type is smartcomm-extremevalues-panel
     source is first
-    traces -> Würnsdorf_temperature, Fadenbach_temperature, Würnsdorf_humidity, Fadenbach_humidity
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
 
 Calendar:
     locations -> Wünsdort, Fadenbach
     type is smartcomm-calendar-panel
     source is first
-    traces -> Würnsdorf_temperature, Fadenbach_temperature, Würnsdorf_humidity, Fadenbach_humidity
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
 
 MapFHSP:
     type is smartcomm-map-panel
