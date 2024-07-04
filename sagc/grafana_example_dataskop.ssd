@@ -34,7 +34,7 @@ application:
     dashboard is Grafana
     layout is SinglePage
     roles -> User, SuperUser, Admin
-    panels -> XY, Map, TS, Pie, Bar, SingleLine, MultiLine, ExtremeValues, Calendar, Bullet, MapFHSP
+    panels -> BnB, XY, Map, TS, Pie, Bar, SingleLine, MultiLine, Calendar, Bullet, MapFHSP
 
 
 Map:
@@ -102,6 +102,11 @@ MapFHSP:
     source is first
     traces -> Würnsdorf, Fadenbach
 
+BnB:
+    type is smartcomm-minmaxbarchart-panel
+    source is first
+    locations -> Wünsdort, Fadenbach
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
 
 deployment:
     environments -> local
