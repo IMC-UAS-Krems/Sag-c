@@ -149,6 +149,7 @@ pub enum PanelType {
     GrafanaExtValues,
     GrafanaCalendar,
     GrafanaBnB,
+    GrafanaBulletGraph,
 }
 
 #[derive(Debug)]
@@ -994,6 +995,9 @@ impl<'a> PanelTypeUnion<'a> {
             }
             PanelType::GrafanaBnB => {
                 PanelTypeUnion::GrafanaBnB(GrafanaBnB::new(blocks, block_name)?)
+            }
+            PanelType::GrafanaBulletGraph => {
+                PanelTypeUnion::GrafanaBulletGraph(GrafanaBulletGraph::new(blocks, block_name)?)
             }
         };
         Ok(panel_type_union)
@@ -2252,6 +2256,7 @@ impl FromStr for PanelType {
             "smartcomm-extremevalues-panel" => Ok(PanelType::GrafanaExtValues),
             "smartcomm-calendar-panel" => Ok(PanelType::GrafanaCalendar),
             "smartcomm-bars-and-bubbles" => Ok(PanelType::GrafanaBnB),
+            "smartcomm-bulletgraph-panel" => Ok(PanelType::GrafanaBulletGraph),
             _ => Err(format!("invalid panel type: {}", input)),
         }
     }
@@ -2391,6 +2396,7 @@ impl Display for PanelType {
             PanelType::GrafanaExtValues => write!(f, "smartcomm-extremevalues-panel"),
             PanelType::GrafanaCalendar => write!(f, "smartcomm-calendar-panel"),
             PanelType::GrafanaBnB => write!(f, "smartcomm-bars-and-bubbles"),
+            PanelType::GrafanaBulletGraph => write!(f, "smartcomm-bulletgraph-panel"),
         }
     }
 }
@@ -2508,6 +2514,7 @@ impl<'a> From<PanelType> for &'a str {
             PanelType::GrafanaExtValues => "smartcomm-extremevalues-panel",
             PanelType::GrafanaCalendar => "smartcomm-calendar-panel",
             PanelType::GrafanaBnB => "smartcomm-bars-and-bubbles",
+            PanelType::GrafanaBulletGraph => "smartcomm-bulletgraph-panel",
         }
     }
 }
