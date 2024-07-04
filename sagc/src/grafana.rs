@@ -1,6 +1,6 @@
 use crate::sections::{
     Application, BarChart, Config, Datasource, DatasourceConfig, Deployment, Environment, GeoMap,
-    GrafanaCalendar, GrafanaExtValues, GrafanaMap, GrafanaMultiLine, GrafanaSingleLine,
+    GrafanaCalendar, GrafanaExtValues, GrafanaMap, GrafanaMultiLine, GrafanaSingleLine, GrafanaBnB,
     PanelTypeUnion, PieChart, Service, TimeSeries, Version, XYChart,
 };
 
@@ -120,6 +120,15 @@ struct MultiLine {
 }
 
 #[derive(Debug, Serialize)]
+struct BnB {
+    #[serde(rename = "type")]
+    chart_type: String,
+    source: String,
+    traces: Vec<String>,
+    locations: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
 struct Calendar {
     #[serde(rename = "type")]
     chart_type: String,
@@ -160,6 +169,8 @@ enum GrafanaPanel {
     GrafanaExtValues(ExtValues),
     #[serde(rename = "smartcomm-calendar-panel")]
     GrafanaCalendar(Calendar),
+    #[serde(rename = "smartcomm-bars-and-bubbles")]
+    GrafanaBnB(BnB),
     NotSupported,
 }
 
@@ -309,6 +320,17 @@ impl<'a> From<GrafanaMultiLine<'a>> for MultiLine {
     }
 }
 
+impl<'a> From<GrafanaBnB<'a>> for BnB {
+    fn from(value: GrafanaBnB<'a>) -> Self {
+        BnB {
+            chart_type: value.r#type.to_string(),
+            source: value.source.to_string(),
+            traces: value.traces.iter().map(|f| f.to_string()).collect(),
+            locations: value.locations.iter().map(|f| f.to_string()).collect(),
+        }
+    }
+}
+
 impl<'a> From<GrafanaExtValues<'a>> for ExtValues {
     fn from(value: GrafanaExtValues<'a>) -> Self {
         ExtValues {
@@ -365,6 +387,9 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         }
                         PanelTypeUnion::GrafanaCalendar(g_calendar) => {
                             GrafanaPanel::GrafanaCalendar(g_calendar.into())
+                        }
+                        PanelTypeUnion::GrafanaBnB(g_bnb) => {
+                            GrafanaPanel::GrafanaBnB(g_bnb.into())
                         }
                     };
                     (name.to_string(), grafana_panel)
