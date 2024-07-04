@@ -1,0 +1,112 @@
+service:
+    title is Grafana dashboard
+    version is 1.0.0
+    scope is Environment
+
+data:
+    sources -> first
+
+first:
+    type is SmartMeter
+    provider is Dataskop
+    uri is https://backend.dataskop.at/
+    query is AirQualityObserved
+    config:
+        measurements:
+            1491 is Würnsdorf_Temperatur
+            1492 is Würnsdorf_Luftfeuchtigkeit
+            1493 is Würnsdorf_Luftdruck
+            1489 is Würnsdorf_Feinstaub
+            1502 is Fadenbach_Temperatur
+            1501 is Fadenbach_Luftfeuchtigkeit
+            1503 is Fadenbach_Luftdruck
+            1499 is Fadenbach_Feinstaub
+            43 is Fadenbach
+            41 is Würnsdorf
+            42 is Zelking
+            40 is Retz
+            45 is Leobersdorf
+        token is 0309f94e6e214fc3bfa32142c89af3f90d4f5172f5674c7a8099dd4d75618929
+        company is 23
+
+application:
+    type is Web
+    dashboard is Grafana
+    layout is SinglePage
+    roles -> User, SuperUser, Admin
+    panels -> XY, Map, TS, Pie, Bar, SingleLine, MultiLine, ExtremeValues, Calendar, Bullet, MapFHSP
+
+
+Map:
+    label is map
+    type is geomap
+    source is first
+    data -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
+
+Pie:
+    label is pie
+    type is pie_chart
+    source is first
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
+    pie_chart_type is pie
+
+XY:
+    label is xy
+    type is xy_chart
+    source is first
+    traces -> Würnsdorf_Temperatur, Würnsdorf_Luftfeuchtigkeit
+
+TS:
+    label is ts
+    type is timeseries
+    source is first
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur
+
+Bar:
+    label is bar
+    type is bar_chart
+    source is first
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
+
+SingleLine:
+    type is smartcomm-simpleline-panel
+    source is first
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
+
+MultiLine:
+    locations -> Wünsdort, Fadenbach
+    type is smartcomm-multiplelinechart-panel
+    source is first
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
+
+Bullet:
+    locations -> Wünsdort, Fadenbach
+    type is smartcomm-bulletgraph-panel
+    source is first
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
+
+ExtremeValues:
+    locations -> Wünsdort, Fadenbach
+    type is smartcomm-extremevalues-panel
+    source is first
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
+
+Calendar:
+    locations -> Wünsdort, Fadenbach
+    type is smartcomm-calendar-panel
+    source is first
+    traces -> Würnsdorf_Temperatur, Fadenbach_Temperatur, Würnsdorf_Luftfeuchtigkeit, Fadenbach_Luftfeuchtigkeit
+
+MapFHSP:
+    type is smartcomm-map-panel
+    source is first
+    traces -> Würnsdorf, Fadenbach
+
+
+deployment:
+    environments -> local
+
+local:
+    uri is https://localhost.org:3000/test
+    port is 50055
+    type is Docker

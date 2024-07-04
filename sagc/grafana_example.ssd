@@ -2,9 +2,6 @@ service:
     title is Grafana dashboard
     version is 1.0.0
     scope is Environment
-    test:
-        one is one
-        two is two
 
 data:
     sources -> first
@@ -14,6 +11,12 @@ first:
     provider is Fiware
     uri is https://data.iiss.at/dataskop/fiwarenosec/v2/entities
     query is AirQualityObserved
+    config:
+        measurements:
+            450 is temperature
+            330 is humidity
+        token is 1234567890
+        company is 23
 
 application:
     type is Web

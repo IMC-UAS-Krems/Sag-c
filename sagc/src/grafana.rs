@@ -1,7 +1,8 @@
 use crate::sections::{
     Application, BarChart, Config, Datasource, DatasourceConfig, Deployment, Environment, GeoMap,
-    GrafanaCalendar, GrafanaExtValues, GrafanaMap, GrafanaMultiLine, GrafanaSingleLine, GrafanaBnB,
-    PanelTypeUnion, PieChart, Service, TimeSeries, Version, XYChart,
+    GrafanaBnB, GrafanaBulletGraph, GrafanaCalendar, GrafanaExtValues, GrafanaMap,
+    GrafanaMultiLine, GrafanaSingleLine, PanelTypeUnion, PieChart, Service, TimeSeries, Version,
+    XYChart,
 };
 
 use serde::Serialize;
@@ -34,7 +35,7 @@ struct GrafanaVersion {
 struct GrafanaDatasource {
     provider: String,
     uri: Url,
-    query: String,
+    query: Option<String>,
     #[serde(rename = "type")]
     datasource_type: String,
     config: Option<GrafanaDatasourceConfig>,
@@ -43,7 +44,7 @@ struct GrafanaDatasource {
 #[derive(Debug, Serialize)]
 struct GrafanaDatasourceConfig {
     company: usize,
-    measurement: usize,
+    measurements: HashMap<String, usize>,
     token: String,
 }
 
@@ -138,6 +139,15 @@ struct Calendar {
 }
 
 #[derive(Debug, Serialize)]
+struct BulletGraph {
+    #[serde(rename = "type")]
+    chart_type: String,
+    source: String,
+    traces: Vec<String>,
+    locations: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
 struct ExtValues {
     #[serde(rename = "type")]
     chart_type: String,
@@ -171,6 +181,8 @@ enum GrafanaPanel {
     GrafanaCalendar(Calendar),
     #[serde(rename = "smartcomm-bars-and-bubbles")]
     GrafanaBnB(BnB),
+    #[serde(rename = "smartcomm-bulletgraph-panel")]
+    BulletGraph(BulletGraph),
     NotSupported,
 }
 
@@ -221,7 +233,7 @@ impl<'a> From<Datasource<'a>> for GrafanaDatasource {
         GrafanaDatasource {
             provider: val.provider.to_string(),
             uri: val.uri,
-            query: val.query.to_string(),
+            query: val.query.map(|q| q.to_string()),
             datasource_type: val.r#type.to_string(),
             config: val.config.map(|c| c.into()),
         }
@@ -232,7 +244,11 @@ impl<'a> From<DatasourceConfig<'a>> for GrafanaDatasourceConfig {
     fn from(val: DatasourceConfig) -> Self {
         GrafanaDatasourceConfig {
             company: val.company,
-            measurement: val.measurement,
+            measurements: val
+                .measurements
+                .into_iter()
+                .map(|(k, v)| (v.to_string(), k))
+                .collect(),
             token: val.token.to_string(),
         }
     }
@@ -353,6 +369,17 @@ impl<'a> From<GrafanaCalendar<'a>> for Calendar {
     }
 }
 
+impl<'a> From<GrafanaBulletGraph<'a>> for BulletGraph {
+    fn from(value: GrafanaBulletGraph<'a>) -> Self {
+        BulletGraph {
+            chart_type: value.r#type.to_string(),
+            source: value.source.to_string(),
+            traces: value.traces.iter().map(|f| f.to_string()).collect(),
+            locations: value.locations.iter().map(|f| f.to_string()).collect(),
+        }
+    }
+}
+
 impl<'a> From<Application<'a>> for GrafanaApplication {
     fn from(value: Application<'a>) -> Self {
         GrafanaApplication {
@@ -375,7 +402,9 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         }
                         PanelTypeUnion::GeoMap(geo_map) => GrafanaPanel::GeoMap(geo_map.into()),
                         PanelTypeUnion::XYChart(xy_chart) => GrafanaPanel::XYChart(xy_chart.into()),
-                        PanelTypeUnion::GrafanaMap(_) => GrafanaPanel::NotSupported,
+                        PanelTypeUnion::GrafanaMap(geomap) => {
+                            GrafanaPanel::GrafanaMap(geomap.into())
+                        }
                         PanelTypeUnion::GrafanaSingleLine(g_sline) => {
                             GrafanaPanel::GrafanaSingleLine(g_sline.into())
                         }
@@ -388,8 +417,9 @@ impl<'a> From<Application<'a>> for GrafanaApplication {
                         PanelTypeUnion::GrafanaCalendar(g_calendar) => {
                             GrafanaPanel::GrafanaCalendar(g_calendar.into())
                         }
-                        PanelTypeUnion::GrafanaBnB(g_bnb) => {
-                            GrafanaPanel::GrafanaBnB(g_bnb.into())
+                        PanelTypeUnion::GrafanaBnB(g_bnb) => GrafanaPanel::GrafanaBnB(g_bnb.into()),
+                        PanelTypeUnion::GrafanaBulletGraph(g_bullet) => {
+                            GrafanaPanel::BulletGraph(g_bullet.into())
                         }
                     };
                     (name.to_string(), grafana_panel)

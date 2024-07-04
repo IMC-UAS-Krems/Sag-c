@@ -33,13 +33,13 @@ struct DashDatasource {
 #[derive(Debug, Serialize)]
 struct DatasourceConfigDash {
     company: usize,
-    measurement: usize,
+    measurements: HashMap<usize, String>,
     token: String,
 }
 
 #[derive(Debug, Serialize)]
 struct DashQuery {
-    r#type: String,
+    r#type: Option<String>,
     select: Vec<String>,
 }
 
@@ -191,7 +191,7 @@ impl<'a> From<Config<'a>> for Dash {
                     provider: datasource.provider.to_string(),
                     uri: datasource.uri.to_string(),
                     query: DashQuery {
-                        r#type: datasource.query.to_string(),
+                        r#type: datasource.query.map(|q| q.to_string()),
                         select: traces.iter().map(|s| s.to_string()).collect(),
                     },
                     datasource_type: datasource.r#type.to_string(),
@@ -236,7 +236,11 @@ impl<'a> From<DatasourceConfig<'a>> for DatasourceConfigDash {
     fn from(val: DatasourceConfig) -> Self {
         DatasourceConfigDash {
             company: val.company,
-            measurement: val.measurement,
+            measurements: val
+                .measurements
+                .into_iter()
+                .map(|(k, v)| (k, v.to_string()))
+                .collect(),
             token: val.token.to_string(),
         }
     }

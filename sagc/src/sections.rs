@@ -3,6 +3,7 @@ use nom::character::complete::i16;
 use nom::multi::separated_list1;
 use nom::IResult;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::str::FromStr;
 use url::Url;
 
@@ -66,7 +67,7 @@ pub struct Datasource<'a> {
     pub provider: Provider,
     pub r#type: SourceType,
     pub uri: Url,
-    pub query: &'a str,
+    pub query: Option<&'a str>,
     pub config: Option<DatasourceConfig<'a>>,
 }
 
@@ -85,7 +86,7 @@ pub enum SourceType {
 #[derive(Debug)]
 pub struct DatasourceConfig<'a> {
     pub company: usize,
-    pub measurement: usize,
+    pub measurements: HashMap<usize, &'a str>,
     pub token: &'a str,
 }
 
@@ -132,6 +133,7 @@ pub enum PanelTypeUnion<'a> {
     GrafanaExtValues(GrafanaExtValues<'a>),
     GrafanaCalendar(GrafanaCalendar<'a>),
     GrafanaBnB(GrafanaBnB<'a>),
+    GrafanaBulletGraph(GrafanaBulletGraph<'a>),
 }
 
 #[derive(Debug)]
@@ -147,6 +149,7 @@ pub enum PanelType {
     GrafanaExtValues,
     GrafanaCalendar,
     GrafanaBnB,
+    GrafanaBulletGraph,
 }
 
 #[derive(Debug)]
@@ -199,6 +202,14 @@ pub struct GrafanaExtValues<'a> {
 
 #[derive(Debug)]
 pub struct GrafanaCalendar<'a> {
+    pub r#type: PanelType,
+    pub source: &'a str,
+    pub locations: Vec<&'a str>,
+    pub traces: Vec<&'a str>,
+}
+
+#[derive(Debug)]
+pub struct GrafanaBulletGraph<'a> {
     pub r#type: PanelType,
     pub source: &'a str,
     pub locations: Vec<&'a str>,
@@ -261,13 +272,13 @@ pub enum EnvironmentType {
 }
 
 impl<'a> Config<'a> {
-    pub fn new(blocks: Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let mut errors = Vec::new();
 
-        let application = Application::new(&blocks);
-        let service = Service::new(&blocks);
-        let data = SagData::new(&blocks);
-        let deployment = Deployment::new(&blocks);
+        let application = Application::new(blocks);
+        let service = Service::new(blocks);
+        let data = SagData::new(blocks);
+        let deployment = Deployment::new(blocks);
 
         let service = match service {
             Ok(service) => Some(service),
@@ -343,12 +354,12 @@ impl<'a> Config<'a> {
 }
 
 impl<'a> Service<'a> {
-    fn check(blocks: &Blocks<'a>) -> Result<(&'a str, Scope, Version), Vec<SagError>> {
+    fn check(blocks: &mut Blocks<'a>) -> Result<(&'a str, Scope, Version), Vec<SagError>> {
         const SECTION_NAME: &str = "service";
         let mut errors = Vec::new();
 
         let block = blocks
-            .get(SECTION_NAME)
+            .get_mut(SECTION_NAME)
             .ok_or(SagError::internal_error(format!(
                 "Missing section {}",
                 SECTION_NAME
@@ -418,7 +429,7 @@ impl<'a> Service<'a> {
         Ok((title.unwrap(), scope.unwrap(), version.unwrap()))
     }
 
-    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let (title, scope, version) = Service::check(blocks)?;
 
         Ok(Service {
@@ -430,12 +441,12 @@ impl<'a> Service<'a> {
 }
 
 impl<'a> SagData<'a> {
-    fn check(blocks: &Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
+    fn check(blocks: &mut Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
         const SECTION_NAME: &str = "data";
         let mut errors = Vec::new();
 
         let data = blocks
-            .get(SECTION_NAME)
+            .get_mut(SECTION_NAME)
             .ok_or(SagError::internal_error(format!(
                 "Missing section {}",
                 SECTION_NAME
@@ -467,7 +478,7 @@ impl<'a> SagData<'a> {
         Ok(data_sources)
     }
 
-    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         const SECTION_NAME: &str = "data";
 
         let mut errors = Vec::new();
@@ -497,7 +508,7 @@ impl<'a> SagData<'a> {
 
 impl<'a> Datasource<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         source_name: &'a str,
         source_name_position: Position,
     ) -> Result<
@@ -505,14 +516,14 @@ impl<'a> Datasource<'a> {
             Provider,
             SourceType,
             Url,
-            &'a str,
+            Option<&'a str>,
             Option<DatasourceConfig<'a>>,
         ),
         Vec<SagError>,
     > {
         let mut errors = Vec::new();
 
-        let datasource = blocks.get(source_name).ok_or(SagError::language_error(
+        let datasource = blocks.get_mut(source_name).ok_or(SagError::language_error(
             LanguageErrorKind::MissingSection(source_name.to_string()),
             source_name_position,
         ));
@@ -535,7 +546,7 @@ impl<'a> Datasource<'a> {
         let provider = parse!(datasource, &str, source_name, "provider");
         let r#type = parse!(datasource, &str, source_name, "type");
         let uri = parse!(datasource, &str, source_name, "uri");
-        let query = parse!(datasource, &str, source_name, "query");
+        let query = parse!(datasource, Option<&str>, source_name, "query");
         let config = DatasourceConfig::new(datasource);
 
         let provider: Option<Provider> = match provider {
@@ -584,11 +595,17 @@ impl<'a> Datasource<'a> {
         };
 
         let query: Option<&str> = match query {
-            Ok((query, _)) => Some(query),
-            Err(e) => {
-                errors.push(e);
-                None
-            }
+            Some((query, _)) => Some(query),
+            None => match provider {
+                Some(Provider::Fiware) => {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::MissingSection("query".to_string()),
+                        datasource.position,
+                    ));
+                    None
+                }
+                _ => None,
+            },
         };
 
         let config: Option<DatasourceConfig<'a>> = match (config, &provider) {
@@ -616,13 +633,13 @@ impl<'a> Datasource<'a> {
             provider.unwrap(),
             r#type.unwrap(),
             uri.unwrap(),
-            query.unwrap(),
+            query,
             config,
         ))
     }
 
     fn new(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         source_name: &'a str,
         source_name_position: Position,
     ) -> Result<Self, Vec<SagError>> {
@@ -641,17 +658,17 @@ impl<'a> Datasource<'a> {
 
 impl<'a> DatasourceConfig<'a> {
     fn check(
-        datasource: &ParseResult<'a>,
-    ) -> Result<Option<(usize, usize, &'a str)>, Vec<SagError>> {
+        datasource: &mut ParseResult<'a>,
+    ) -> Result<Option<(usize, HashMap<usize, &'a str>, &'a str)>, Vec<SagError>> {
         let mut errors = Vec::new();
         const SECTION_NAME: &str = "config";
 
-        let block = match &datasource.value {
+        let block = match &mut datasource.value {
             Value::Block(block) => block,
             _ => unreachable!(),
         };
 
-        let block = block.get(SECTION_NAME);
+        let block = block.get_mut(SECTION_NAME);
 
         if block.is_none() {
             return Ok(None);
@@ -668,7 +685,7 @@ impl<'a> DatasourceConfig<'a> {
         }
 
         let company = parse!(block, usize, SECTION_NAME, "company");
-        let measurement = parse!(block, usize, SECTION_NAME, "measurement");
+        let measurement = parse!(block, HashMap<usize, &str>, SECTION_NAME, "measurements");
         let token = parse!(block, &str, SECTION_NAME, "token");
 
         let company: Option<usize> = match company {
@@ -679,7 +696,7 @@ impl<'a> DatasourceConfig<'a> {
             }
         };
 
-        let measurement: Option<usize> = match measurement {
+        let measurement: Option<HashMap<usize, &str>> = match measurement {
             Ok((measurement, _)) => Some(measurement),
             Err(e) => {
                 errors.push(e);
@@ -706,25 +723,22 @@ impl<'a> DatasourceConfig<'a> {
         )))
     }
 
-    fn new(block: &ParseResult<'a>) -> Result<Option<Self>, Vec<SagError>> {
-        let result = DatasourceConfig::check(block);
-        if let Err(e) = result {
-            return Err(e);
-        }
-        if let Some((company, measurement, token)) = result.unwrap() {
+    fn new(block: &mut ParseResult<'a>) -> Result<Option<Self>, Vec<SagError>> {
+        let result = DatasourceConfig::check(block)?;
+        if let Some((company, measurements, token)) = result {
             return Ok(Some(DatasourceConfig {
                 company,
-                measurement,
+                measurements,
                 token,
             }));
         }
-        return Ok(None);
+        Ok(None)
     }
 }
 
 impl<'a> Application<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
     ) -> Result<
         (
             ApplicationType,
@@ -739,7 +753,7 @@ impl<'a> Application<'a> {
         let mut errors = Vec::new();
 
         let block = blocks
-            .get(SECTION_NAME)
+            .get_mut(SECTION_NAME)
             .ok_or(SagError::internal_error(format!(
                 "Missing section {}",
                 SECTION_NAME
@@ -758,6 +772,7 @@ impl<'a> Application<'a> {
             ));
             return Err(errors);
         }
+
         let r#type = parse!(block, &str, SECTION_NAME, "type");
         let dashboard = parse!(block, &str, SECTION_NAME, "dashboard");
         let layout = parse!(block, &str, SECTION_NAME, "layout");
@@ -837,7 +852,7 @@ impl<'a> Application<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let (r#type, dashboard, layout, roles, panels) = Application::check(blocks)?;
         let mut errors = Vec::new();
 
@@ -892,22 +907,22 @@ impl<'a> Application<'a> {
                 if !errors.is_empty() {
                     return Err(errors);
                 }
-                return Ok(());
+                Ok(())
             }
-            DashboardType::Grafana => return Ok(()),
+            DashboardType::Grafana => Ok(()),
         }
     }
 }
 
 impl<'a> PanelTypeUnion<'a> {
     fn check(
-        blocks: &'a Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
         block_ref_position: Position,
     ) -> Result<PanelType, Vec<SagError>> {
         let mut errors = Vec::new();
 
-        let block = blocks.get(block_name).ok_or(SagError::language_error(
+        let block = blocks.get_mut(block_name).ok_or(SagError::language_error(
             LanguageErrorKind::IncorrectPanelName(block_name.to_string()),
             block_ref_position,
         ));
@@ -926,11 +941,14 @@ impl<'a> PanelTypeUnion<'a> {
             ));
             return Err(errors);
         }
+
         let panel_type = parse!(block, &str, block_name, "type");
+
         if let Err(e) = panel_type {
             errors.push(e);
             return Err(errors);
         }
+
         let panel_type = panel_type.unwrap();
         let panel_type = PanelType::from_str(panel_type.0).map_err(|_| {
             SagError::language_error(
@@ -946,7 +964,7 @@ impl<'a> PanelTypeUnion<'a> {
     }
 
     fn new(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
         block_ref_position: Position,
     ) -> Result<Self, Vec<SagError>> {
@@ -978,6 +996,9 @@ impl<'a> PanelTypeUnion<'a> {
             PanelType::GrafanaBnB => {
                 PanelTypeUnion::GrafanaBnB(GrafanaBnB::new(blocks, block_name)?)
             }
+            PanelType::GrafanaBulletGraph => {
+                PanelTypeUnion::GrafanaBulletGraph(GrafanaBulletGraph::new(blocks, block_name)?)
+            }
         };
         Ok(panel_type_union)
     }
@@ -985,12 +1006,13 @@ impl<'a> PanelTypeUnion<'a> {
 
 impl<'a> GeoMap<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
 
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
+
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1047,7 +1069,7 @@ impl<'a> GeoMap<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, data, area) = GeoMap::check(blocks, block_name)?;
 
         Ok(GeoMap {
@@ -1062,11 +1084,11 @@ impl<'a> GeoMap<'a> {
 
 impl<'a> GrafanaMap<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1110,7 +1132,7 @@ impl<'a> GrafanaMap<'a> {
         Ok((r#type.unwrap(), source.unwrap(), traces.unwrap()))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, traces) = GrafanaMap::check(blocks, block_name)?;
 
         Ok(GrafanaMap {
@@ -1123,7 +1145,7 @@ impl<'a> GrafanaMap<'a> {
 
 impl<'a> PieChart<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<
         (
@@ -1136,7 +1158,7 @@ impl<'a> PieChart<'a> {
         Vec<SagError>,
     > {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1208,7 +1230,7 @@ impl<'a> PieChart<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces, pie_chart_type) = PieChart::check(blocks, block_name)?;
 
         Ok(PieChart {
@@ -1223,11 +1245,11 @@ impl<'a> PieChart<'a> {
 
 impl<'a> BarChart<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1282,7 +1304,7 @@ impl<'a> BarChart<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces) = BarChart::check(blocks, block_name)?;
 
         Ok(BarChart {
@@ -1296,11 +1318,11 @@ impl<'a> BarChart<'a> {
 
 impl<'a> TimeSeries<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1355,7 +1377,7 @@ impl<'a> TimeSeries<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces) = TimeSeries::check(blocks, block_name)?;
 
         Ok(TimeSeries {
@@ -1369,11 +1391,11 @@ impl<'a> TimeSeries<'a> {
 
 impl<'a> XYChart<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let label = parse!(block, &str, block_name, "label");
         let r#type = parse!(block, &str, block_name, "type");
@@ -1428,7 +1450,7 @@ impl<'a> XYChart<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces) = XYChart::check(blocks, block_name)?;
 
         Ok(XYChart {
@@ -1442,11 +1464,11 @@ impl<'a> XYChart<'a> {
 
 impl<'a> GrafanaSingleLine<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1490,7 +1512,7 @@ impl<'a> GrafanaSingleLine<'a> {
         Ok((r#type.unwrap(), source.unwrap(), traces.unwrap()))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, traces) = GrafanaSingleLine::check(blocks, block_name)?;
 
         Ok(GrafanaSingleLine {
@@ -1503,11 +1525,11 @@ impl<'a> GrafanaSingleLine<'a> {
 
 impl<'a> GrafanaMultiLine<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1565,7 +1587,7 @@ impl<'a> GrafanaMultiLine<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaMultiLine::check(blocks, block_name)?;
 
         Ok(GrafanaMultiLine {
@@ -1579,11 +1601,11 @@ impl<'a> GrafanaMultiLine<'a> {
 
 impl<'a> GrafanaExtValues<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1641,7 +1663,7 @@ impl<'a> GrafanaExtValues<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaExtValues::check(blocks, block_name)?;
 
         Ok(GrafanaExtValues {
@@ -1655,11 +1677,11 @@ impl<'a> GrafanaExtValues<'a> {
 
 impl<'a> GrafanaCalendar<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1717,7 +1739,7 @@ impl<'a> GrafanaCalendar<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaCalendar::check(blocks, block_name)?;
 
         Ok(GrafanaCalendar {
@@ -1729,13 +1751,91 @@ impl<'a> GrafanaCalendar<'a> {
     }
 }
 
+//GrafanaBulletGraph
+impl<'a> GrafanaBulletGraph<'a> {
+    fn check(
+        blocks: &mut Blocks<'a>,
+        block_name: &'a str,
+    ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
+        let mut errors = Vec::new();
+        let block = blocks.get_mut(block_name).unwrap();
+
+        let r#type = parse!(block, &str, block_name, "type");
+        let source = parse!(block, &str, block_name, "source");
+        let locations = parse!(block, Vec<&str>, block_name, "locations");
+        let traces = parse!(block, Vec<&str>, block_name, "traces");
+
+        let r#type = match r#type {
+            Ok((r#type, r#type_pos)) => PanelType::from_str(r#type)
+                .map_err(|_| {
+                    errors.push(SagError::language_error(
+                        LanguageErrorKind::InvalidValue(r#type.to_string()),
+                        r#type_pos,
+                    ))
+                })
+                .ok(),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let source = match source {
+            Ok((source, _)) => Some(source),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let locations = match locations {
+            Ok((locations, _)) => Some(locations),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        let traces = match traces {
+            Ok((traces, _)) => Some(traces),
+            Err(e) => {
+                errors.push(e);
+                None
+            }
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok((
+            r#type.unwrap(),
+            source.unwrap(),
+            locations.unwrap(),
+            traces.unwrap(),
+        ))
+    }
+
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+        dbg!("GrafanaBulletGraph::new");
+        let (r#type, source, locations, traces) = GrafanaBulletGraph::check(blocks, block_name)?;
+
+        Ok(GrafanaBulletGraph {
+            r#type,
+            source,
+            locations,
+            traces,
+        })
+    }
+}
+
 impl<'a> Deployment<'a> {
-    fn check(blocks: &Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
+    fn check(blocks: &mut Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
         const SECTION_NAME: &str = "deployment";
         let mut errors = Vec::new();
 
         let block = blocks
-            .get(SECTION_NAME)
+            .get_mut(SECTION_NAME)
             .ok_or(SagError::internal_error(format!(
                 "Missing section {SECTION_NAME}"
             )));
@@ -1764,7 +1864,7 @@ impl<'a> Deployment<'a> {
         Ok(environments.unwrap())
     }
 
-    fn new(blocks: &Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let environments = Deployment::check(blocks)?;
         let mut errors = Vec::new();
 
@@ -1790,13 +1890,13 @@ impl<'a> Deployment<'a> {
 
 impl<'a> Environment<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
         block_ref_pos: Position,
     ) -> Result<(&'a str, i32, EnvironmentType), Vec<SagError>> {
         let mut errors = Vec::new();
 
-        let block = blocks.get(block_name).ok_or(SagError::language_error(
+        let block = blocks.get_mut(block_name).ok_or(SagError::language_error(
             LanguageErrorKind::MissingSection(block_name.to_string()),
             block_ref_pos,
         ));
@@ -1867,7 +1967,7 @@ impl<'a> Environment<'a> {
     }
 
     fn new(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
         block_ref_pos: Position,
     ) -> Result<Self, Vec<SagError>> {
@@ -1879,11 +1979,11 @@ impl<'a> Environment<'a> {
 
 impl<'a> GrafanaBnB<'a> {
     fn check(
-        blocks: &Blocks<'a>,
+        blocks: &mut Blocks<'a>,
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
-        let block = blocks.get(block_name).unwrap();
+        let block = blocks.get_mut(block_name).unwrap();
 
         let r#type = parse!(block, &str, block_name, "type");
         let source = parse!(block, &str, block_name, "source");
@@ -1941,7 +2041,7 @@ impl<'a> GrafanaBnB<'a> {
         ))
     }
 
-    fn new(blocks: &Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaBnB::check(blocks, block_name)?;
 
         Ok(GrafanaBnB {
@@ -1952,7 +2052,6 @@ impl<'a> GrafanaBnB<'a> {
         })
     }
 }
-
 
 // Panel implementation
 
@@ -1977,6 +2076,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaExtValues(gextv) => gextv.source,
             PanelTypeUnion::GrafanaCalendar(gc) => gc.source,
             PanelTypeUnion::GrafanaBnB(bb) => bb.source,
+            PanelTypeUnion::GrafanaBulletGraph(gbg) => gbg.source,
         }
     }
 
@@ -1993,6 +2093,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaExtValues(_) => None,
             PanelTypeUnion::GrafanaCalendar(_) => None,
             PanelTypeUnion::GrafanaBnB(_) => None,
+            PanelTypeUnion::GrafanaBulletGraph(_) => None,
         }
     }
 
@@ -2009,6 +2110,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaExtValues(gextv) => &gextv.traces,
             PanelTypeUnion::GrafanaCalendar(gc) => &gc.traces,
             PanelTypeUnion::GrafanaBnB(bb) => &bb.traces,
+            PanelTypeUnion::GrafanaBulletGraph(gbg) => &gbg.traces,
         }
     }
 
@@ -2025,6 +2127,7 @@ impl<'a> Panel for PanelTypeUnion<'a> {
             PanelTypeUnion::GrafanaExtValues(gextv) => Some(&gextv.locations),
             PanelTypeUnion::GrafanaCalendar(gc) => Some(&gc.locations),
             PanelTypeUnion::GrafanaBnB(bb) => Some(&bb.locations),
+            PanelTypeUnion::GrafanaBulletGraph(gbg) => Some(&gbg.locations),
         }
     }
 }
@@ -2153,6 +2256,7 @@ impl FromStr for PanelType {
             "smartcomm-extremevalues-panel" => Ok(PanelType::GrafanaExtValues),
             "smartcomm-calendar-panel" => Ok(PanelType::GrafanaCalendar),
             "smartcomm-bars-and-bubbles" => Ok(PanelType::GrafanaBnB),
+            "smartcomm-bulletgraph-panel" => Ok(PanelType::GrafanaBulletGraph),
             _ => Err(format!("invalid panel type: {}", input)),
         }
     }
@@ -2181,133 +2285,135 @@ impl FromStr for EnvironmentType {
 
 // ToString implementations
 
-impl ToString for Version {
-    fn to_string(&self) -> String {
-        format!("{}.{}.{}", self.major, self.minor, self.patch)
+impl Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
     }
 }
 
-impl ToString for Scope {
-    fn to_string(&self) -> String {
+impl Display for Scope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Scope::Service => String::from("service"),
-            Scope::Industry => String::from("industry"),
-            Scope::Manifacturing => String::from("manifacturing"),
-            Scope::Education => String::from("education"),
-            Scope::Healthcare => String::from("healthcare"),
-            Scope::SocialPrograms => String::from("social_programs"),
-            Scope::Government => String::from("government"),
-            Scope::Energy => String::from("energy"),
-            Scope::Water => String::from("water"),
-            Scope::Environment => String::from("environment"),
-            Scope::Transportation => String::from("transportation"),
-            Scope::Communication => String::from("communication"),
-            Scope::PublicSafety => String::from("public_safety"),
-            Scope::UrbanPlanning => String::from("urban_planning"),
-            Scope::Infrastructure => String::from("infrastructure"),
+            Scope::Service => write!(f, "service"),
+            Scope::Industry => write!(f, "industry"),
+            Scope::Manifacturing => write!(f, "manifacturing"),
+            Scope::Education => write!(f, "education"),
+            Scope::Healthcare => write!(f, "healthcare"),
+            Scope::SocialPrograms => write!(f, "social_programs"),
+            Scope::Government => write!(f, "government"),
+            Scope::Energy => write!(f, "energy"),
+            Scope::Water => write!(f, "water"),
+            Scope::Environment => write!(f, "environment"),
+            Scope::Transportation => write!(f, "transportation"),
+            Scope::Communication => write!(f, "communication"),
+            Scope::PublicSafety => write!(f, "public_safety"),
+            Scope::UrbanPlanning => write!(f, "urban_planning"),
+            Scope::Infrastructure => write!(f, "infrastructure"),
         }
     }
 }
 
-impl ToString for SourceType {
-    fn to_string(&self) -> String {
+impl Display for SourceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SourceType::SmartMeter => String::from("SmartMeter"),
-            SourceType::Sensor => String::from("Sensor"),
+            SourceType::SmartMeter => write!(f, "SmartMeter"),
+            SourceType::Sensor => write!(f, "Sensor"),
         }
     }
 }
 
-impl ToString for Provider {
-    fn to_string(&self) -> String {
+impl Display for Provider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Provider::Fiware => String::from("Fiware"),
-            Provider::Dataskop => String::from("Siemens"),
+            Provider::Fiware => write!(f, "Fiware"),
+            Provider::Dataskop => write!(f, "Dataskop"),
         }
     }
 }
 
-impl ToString for ApplicationType {
-    fn to_string(&self) -> String {
+impl Display for ApplicationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ApplicationType::Web => String::from("Web"),
-            ApplicationType::Mobile => String::from("Mobile"),
-            ApplicationType::Desktop => String::from("Desktop"),
-            ApplicationType::Server => String::from("Server"),
+            ApplicationType::Web => write!(f, "Web"),
+            ApplicationType::Mobile => write!(f, "Mobile"),
+            ApplicationType::Desktop => write!(f, "Desktop"),
+            ApplicationType::Server => write!(f, "Server"),
         }
     }
 }
 
-impl ToString for DashboardType {
-    fn to_string(&self) -> String {
+impl Display for DashboardType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DashboardType::Dash => String::from("Dash"),
-            DashboardType::Grafana => String::from("Grafana"),
+            DashboardType::Dash => write!(f, "Dash"),
+            DashboardType::Grafana => write!(f, "Grafana"),
         }
     }
 }
 
-impl ToString for Layout {
-    fn to_string(&self) -> String {
+impl Display for Layout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Layout::Horizontal => String::from("Horizontal"),
-            Layout::Vertical => String::from("Vertical"),
-            Layout::SinglePage => String::from("SinglePage"),
+            Layout::Horizontal => write!(f, "Horizontal"),
+            Layout::Vertical => write!(f, "Vertical"),
+            Layout::SinglePage => write!(f, "SinglePage"),
         }
     }
 }
 
-impl ToString for PanelTypeUnion<'_> {
-    fn to_string(&self) -> String {
+impl Display for PanelTypeUnion<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PanelTypeUnion::PieChart(_) => String::from("pie_chart"),
-            PanelTypeUnion::TimeSeries(_) => String::from("timeseries"),
-            PanelTypeUnion::BarChart(_) => String::from("bar_chart"),
-            PanelTypeUnion::GeoMap(_) => String::from("geomap"),
-            PanelTypeUnion::XYChart(_) => String::from("xy_chart"),
-            PanelTypeUnion::GrafanaMap(_) => String::from("smartcomm-map-panel"),
-            PanelTypeUnion::GrafanaSingleLine(_) => String::from("smartcomm-simpleline-panel"),
+            PanelTypeUnion::PieChart(_) => write!(f, "pie_chart"),
+            PanelTypeUnion::TimeSeries(_) => write!(f, "timeseries"),
+            PanelTypeUnion::BarChart(_) => write!(f, "bar_chart"),
+            PanelTypeUnion::GeoMap(_) => write!(f, "geomap"),
+            PanelTypeUnion::XYChart(_) => write!(f, "xy_chart"),
+            PanelTypeUnion::GrafanaMap(_) => write!(f, "smartcomm-map-panel"),
+            PanelTypeUnion::GrafanaSingleLine(_) => write!(f, "smartcomm-simpleline-panel"),
             PanelTypeUnion::GrafanaMultiLine(_) => {
-                String::from("smartcomm-multiplelinechart-panel")
+                write!(f, "smartcomm-multiplelinechart-panel")
             }
-            PanelTypeUnion::GrafanaExtValues(_) => String::from("smartcomm-extremevalues-panel"),
-            PanelTypeUnion::GrafanaCalendar(_) => String::from("smartcomm-calendar-panel"),
-            PanelTypeUnion::GrafanaBnB(_) => String::from("smartcomm-bars-and-bubbles"),
+            PanelTypeUnion::GrafanaExtValues(_) => write!(f, "smartcomm-extremevalues-panel"),
+            PanelTypeUnion::GrafanaCalendar(_) => write!(f, "smartcomm-calendar-panel"),
+            PanelTypeUnion::GrafanaBnB(_) => write!(f, "smartcomm-bars-and-bubbles"),
+            PanelTypeUnion::GrafanaBulletGraph(_) => write!(f, "smartcomm-bulletgraph-panel"),
         }
     }
 }
 
-impl ToString for PanelType {
-    fn to_string(&self) -> String {
+impl Display for PanelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PanelType::PieChart => String::from("pie_chart"),
-            PanelType::TimeSeries => String::from("timeseries"),
-            PanelType::BarChart => String::from("bar_chart"),
-            PanelType::GeoMap => String::from("geomap"),
-            PanelType::XYChart => String::from("xy_chart"),
-            PanelType::GrafanaMap => String::from("smartcomm-map-panel"),
-            PanelType::GrafanaSingleLine => String::from("smartcomm-simpleline-panel"),
-            PanelType::GrafanaMultiLine => String::from("smartcomm-multiplelinechart-panel"),
-            PanelType::GrafanaExtValues => String::from("smartcomm-extremevalues-panel"),
-            PanelType::GrafanaCalendar => String::from("smartcomm-calendar-panel"),
-            PanelType::GrafanaBnB => String::from("smartcomm-bars-and-bubbles"),
+            PanelType::PieChart => write!(f, "pie_chart"),
+            PanelType::TimeSeries => write!(f, "timeseries"),
+            PanelType::BarChart => write!(f, "bar_chart"),
+            PanelType::GeoMap => write!(f, "geomap"),
+            PanelType::XYChart => write!(f, "xy_chart"),
+            PanelType::GrafanaMap => write!(f, "smartcomm-map-panel"),
+            PanelType::GrafanaSingleLine => write!(f, "smartcomm-simpleline-panel"),
+            PanelType::GrafanaMultiLine => write!(f, "smartcomm-multiplelinechart-panel"),
+            PanelType::GrafanaExtValues => write!(f, "smartcomm-extremevalues-panel"),
+            PanelType::GrafanaCalendar => write!(f, "smartcomm-calendar-panel"),
+            PanelType::GrafanaBnB => write!(f, "smartcomm-bars-and-bubbles"),
+            PanelType::GrafanaBulletGraph => write!(f, "smartcomm-bulletgraph-panel"),
         }
     }
 }
 
-impl ToString for PieChartType {
-    fn to_string(&self) -> String {
+impl Display for PieChartType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PieChartType::Pie => String::from("pie"),
-            PieChartType::Donut => String::from("donut"),
+            PieChartType::Pie => write!(f, "pie"),
+            PieChartType::Donut => write!(f, "donut"),
         }
     }
 }
 
-impl ToString for EnvironmentType {
-    fn to_string(&self) -> String {
+impl Display for EnvironmentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EnvironmentType::Docker => String::from("Docker"),
+            EnvironmentType::Docker => write!(f, "Docker"),
         }
     }
 }
@@ -2389,6 +2495,7 @@ impl<'a> From<PanelTypeUnion<'a>> for &'a str {
             PanelTypeUnion::GrafanaExtValues(_) => "smartcomm-extremevalues-panel",
             PanelTypeUnion::GrafanaCalendar(_) => "smartcomm-calendar-panel",
             PanelTypeUnion::GrafanaBnB(_) => "smartcomm-bars-and-bubbles",
+            PanelTypeUnion::GrafanaBulletGraph(_) => "smartcomm-bulletgraph-panel",
         }
     }
 }
@@ -2407,6 +2514,7 @@ impl<'a> From<PanelType> for &'a str {
             PanelType::GrafanaExtValues => "smartcomm-extremevalues-panel",
             PanelType::GrafanaCalendar => "smartcomm-calendar-panel",
             PanelType::GrafanaBnB => "smartcomm-bars-and-bubbles",
+            PanelType::GrafanaBulletGraph => "smartcomm-bulletgraph-panel",
         }
     }
 }

@@ -39,27 +39,11 @@ struct NoErrors {
     status: String,
 }
 
-//#[derive(Debug, Serialize)]
-//enum DashboardResponse {
-//    Grafana(Grafana),
-//    Dash(Dash),
-//}
-
 #[derive(Debug, Serialize)]
 struct UrlResponse {
     url: String,
     status: String,
 }
-
-//impl Responder for DashboardResponse {
-//    type Body = actix_web::body::BoxBody;
-//    fn respond_to(self, _: &actix_web::HttpRequest) -> HttpResponse {
-//        match self {
-//            DashboardResponse::Grafana(grafana_json) => HttpResponse::Ok().json(grafana_json),
-//            DashboardResponse::Dash(dash_json) => HttpResponse::Ok().json(dash_json),
-//        }
-//    }
-//}
 
 async fn fetch_grafana_model(
     client: &Client,
@@ -67,7 +51,11 @@ async fn fetch_grafana_model(
     grafana_json: &Grafana,
 ) -> Result<serde_json::Value, GeneralError> {
     log::info!("Fetching Grafana model from {}...", uri);
-    let response = client.post(uri).send_json(grafana_json).await;
+    let response = client
+        .post(uri)
+        .timeout(Duration::new(60 * 5, 0))
+        .send_json(grafana_json)
+        .await;
 
     if let Err(e) = response {
         log::error!("Error fetching Grafana model: {}", e);
@@ -80,6 +68,7 @@ async fn fetch_grafana_model(
 
     if response.status().is_success() {
         let body = response.json::<serde_json::Value>().await.unwrap();
+        log::debug!("{}", &body.to_string());
         Ok(body)
     } else {
         log::error!(
@@ -110,9 +99,13 @@ async fn deploy(
     }
 
     let mut response = response.unwrap();
+    let resp_url = String::from_utf8(response.body().await.unwrap().to_vec())
+        .unwrap()
+        .replace('"', "");
+    log::debug!("{}", &resp_url);
 
     if response.status().is_success() {
-        Ok(String::from_utf8(response.body().await.unwrap().to_vec()).unwrap())
+        Ok(resp_url)
     } else {
         log::error!(
             "Error ({}): {}",
@@ -151,6 +144,7 @@ async fn compile(
 
     if let Ok(config) = result {
         // dbg!(&grafana);
+        dbg!(&config);
         let dashboard_type = match config.application.dashboard {
             DashboardType::Grafana => "grafana",
             DashboardType::Dash => "dash",

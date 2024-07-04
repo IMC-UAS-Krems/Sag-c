@@ -1,24 +1,88 @@
 use crate::{errors::SagError, sections::Config};
 use nom::bytes::complete::{tag, take_while};
-use nom::character::complete::{line_ending, space1};
+use nom::character::complete::line_ending;
 use nom::error::context;
 use nom::multi::many0;
 use nom::sequence::delimited;
 use nom::{
     branch::alt,
-    character::complete::{alpha1, alphanumeric1, space0},
     combinator::{map_res, recognize, verify},
     multi::{many1_count, separated_list0},
     sequence::terminated,
 };
 use nom_locate::LocatedSpan;
+use nom_unicode::complete::{alpha1, alphanumeric1, space0, space1};
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 
 type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;
 type IResultVec<'a> = nom::IResult<Span<'a>, Vec<Token<'a>>>;
 type Span<'a> = LocatedSpan<&'a str>;
-pub type Blocks<'a> = HashMap<&'a str, ParseResult<'a>>;
+//pub type Blocks<'a> = HashMap<&'a str, ParseResult<'a>>;
+
+#[derive(Debug)]
+pub struct Blocks<'a> {
+    blocks: HashMap<&'a str, ParseResult<'a>>,
+}
+
+impl<'a> Blocks<'a> {
+    pub fn new() -> Self {
+        Blocks {
+            blocks: HashMap::new(),
+        }
+    }
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut ParseResult<'a>> {
+        let v = self.blocks.get_mut(key);
+        if let Some(v) = v {
+            v.mark_accessed();
+            return Some(v);
+        }
+        None
+    }
+
+    pub fn get(&mut self, key: &str) -> Option<&ParseResult<'a>> {
+        let v = self.blocks.get_mut(key);
+        if let Some(v) = v {
+            v.mark_accessed();
+            return Some(&*v);
+        }
+        None
+    }
+
+    pub fn get_mut_without_mark(&mut self, key: &str) -> Option<&mut ParseResult<'a>> {
+        let v = self.blocks.get_mut(key);
+        if let Some(v) = v {
+            return Some(v);
+        }
+        None
+    }
+
+    pub fn get_without_mark(&mut self, key: &str) -> Option<&ParseResult<'a>> {
+        let v = self.blocks.get_mut(key);
+        if let Some(v) = v {
+            return Some(&*v);
+        }
+        None
+    }
+
+    pub fn insert(&mut self, key: &'a str, value: ParseResult<'a>) {
+        self.blocks.insert(key, value);
+    }
+
+    pub fn iter(&self) -> std::collections::hash_map::Iter<&'a str, ParseResult<'a>> {
+        self.blocks.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> std::collections::hash_map::IterMut<&'a str, ParseResult<'a>> {
+        self.blocks.iter_mut()
+    }
+}
+
+impl<'a> Default for Blocks<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 const INDENT: usize = 4;
 
@@ -53,11 +117,24 @@ struct Token<'a> {
 pub struct ParseResult<'a> {
     pub position: Position, // NOTE: in case of a block, position is the position of the block name
     pub value: Value<'a>,
+    accessed: bool,
 }
 
 impl ParseResult<'_> {
     fn new(position: Position, value: Value<'_>) -> ParseResult<'_> {
-        ParseResult { position, value }
+        ParseResult {
+            position,
+            value,
+            accessed: false,
+        }
+    }
+
+    pub fn mark_accessed(&mut self) {
+        self.accessed = true;
+    }
+
+    pub fn was_accessed(self) -> bool {
+        self.accessed
     }
 }
 
@@ -65,7 +142,7 @@ impl ParseResult<'_> {
 pub enum Value<'a> {
     String(&'a str),
     Vec(Vec<&'a str>),
-    Block(HashMap<&'a str, ParseResult<'a>>),
+    Block(Blocks<'a>),
 }
 
 impl<'a> Value<'a> {
@@ -74,7 +151,7 @@ impl<'a> Value<'a> {
     }
 }
 
-impl<'a> TryInto<&'a str> for &Value<'a> {
+impl<'a> TryInto<&'a str> for &mut Value<'a> {
     type Error = &'a str;
     fn try_into(self) -> Result<&'a str, Self::Error> {
         match self {
@@ -84,7 +161,7 @@ impl<'a> TryInto<&'a str> for &Value<'a> {
     }
 }
 
-impl<'a> TryInto<usize> for &Value<'a> {
+impl<'a> TryInto<usize> for &mut Value<'a> {
     type Error = &'a str;
     fn try_into(self) -> Result<usize, Self::Error> {
         match self {
@@ -96,11 +173,33 @@ impl<'a> TryInto<usize> for &Value<'a> {
     }
 }
 
-impl<'a> TryInto<Vec<&'a str>> for &Value<'a> {
+impl<'a> TryInto<Vec<&'a str>> for &mut Value<'a> {
     type Error = &'a str;
     fn try_into(self) -> Result<Vec<&'a str>, Self::Error> {
         match self {
             Value::Vec(value) => Ok(value.to_vec()),
+            _ => Err("value is specified in a wrong format"),
+        }
+    }
+}
+
+impl<'a> TryInto<HashMap<usize, &'a str>> for &mut Value<'a> {
+    type Error = &'a str;
+    fn try_into(self) -> Result<HashMap<usize, &'a str>, Self::Error> {
+        match self {
+            Value::Block(value) => {
+                let mut new_value = HashMap::new();
+                for (k, v) in value.iter_mut() {
+                    v.mark_accessed();
+                    let number = k
+                        .parse::<usize>()
+                        .map_err(|_| "value is specified in a wrong format")?;
+                    let v = &mut v.value;
+                    let string: &'a str = v.try_into()?;
+                    new_value.insert(number, string);
+                }
+                Ok(new_value)
+            }
             _ => Err("value is specified in a wrong format"),
         }
     }
@@ -170,7 +269,7 @@ fn parse_section_name(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
-    recognize(many1_count(alt((alpha1, tag("_")))))(input).map(|(input, result)| {
+    recognize(many1_count(alt((alphanumeric1, tag("_")))))(input).map(|(input, result)| {
         let position = Position {
             row_start: line,
             row_end: line,
@@ -222,7 +321,12 @@ fn parse_vec(input: Span) -> IResult {
 
     separated_list0(
         alt((tag(", "), tag(","))),
-        recognize(many1_count(alt((alphanumeric1, space1, tag("."))))),
+        recognize(many1_count(alt((
+            alphanumeric1,
+            //space1, NOTE: this gives error on the separator `, `
+            tag("."),
+            tag("_"),
+        )))),
     )(input)
     .map(|(input, result)| {
         let position = Position {
@@ -340,6 +444,8 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut errors = Vec::new();
     let mut last_indent = 0;
     let mut last_block_indent = 0;
+    // first indent in any section should be `last_block_indent` + 1
+    let mut first_field_indent = true;
 
     // input = seek_to_input(input);
 
@@ -385,6 +491,7 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
         if let Ok((i, result)) = parse_block_name(input) {
             input = i;
             last_block_indent = last_indent;
+            first_field_indent = true;
             tokens.push(result);
             if input.is_empty() {
                 break;
@@ -395,16 +502,21 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
         let result = parse_section_line(input);
         match result {
             Ok((i, token)) => {
-                if last_indent <= last_block_indent {
+                if last_indent == 0
+                    || last_indent - last_block_indent > 1
+                    || first_field_indent && last_indent - last_block_indent != 1
+                {
                     let (i, token) = handle_error(input, TokenValue::IndentError).unwrap();
                     input = i;
                     errors.push(token);
                     continue;
                 }
+                first_field_indent = false;
                 input = i;
                 tokens.extend(token);
             }
             Err(nom::Err::Error(e)) => {
+                dbg!(&e.input);
                 let (i, token) = handle_error(e.input, TokenValue::UnparsableError).unwrap();
                 input = i;
                 errors.push(token);
@@ -428,9 +540,9 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
 
 /// Convert tokens to HashMap for easy access
 fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
-    let mut blocks: HashMap<&str, ParseResult> = HashMap::new();
+    let mut blocks = Blocks::new();
     // vec to track keys of blocks, e.g ["a", "b", "c"] -> a.b.c
-    let mut last_blocks = Vec::new();
+    let mut last_blocks: Vec<&str> = Vec::new();
     let mut tokens = tokens.iter();
 
     // 3 main cases: indent, block, section
@@ -446,7 +558,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
             TokenValue::Block(name) => {
                 let current_block = last_blocks.iter().fold(blocks.borrow_mut(), |b, k| {
                     if let Value::Block(b) = b
-                        .get_mut(k)
+                        .get_mut_without_mark(k)
                         .expect("Key must be present")
                         .value
                         .borrow_mut()
@@ -458,7 +570,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
                 });
                 current_block.insert(
                     name,
-                    ParseResult::new(token.position, Value::Block(HashMap::new())),
+                    ParseResult::new(token.position, Value::Block(Blocks::new())),
                 );
                 last_blocks.push(name);
             }
@@ -466,7 +578,7 @@ fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
             TokenValue::Section(name) => {
                 let current_block = last_blocks.iter().fold(blocks.borrow_mut(), |b, k| {
                     if let Value::Block(b) = b
-                        .get_mut(k)
+                        .get_mut_without_mark(k)
                         .expect("Key must be present")
                         .value
                         .borrow_mut()
@@ -533,15 +645,26 @@ fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
     }
 }
 
+fn check_used_fields(blocks: &Blocks<'_>) {
+    for (k, v) in blocks.iter() {
+        if let Value::Block(b) = &v.value {
+            check_used_fields(b);
+        }
+        if !v.accessed {
+            log::warn!("Field {} is not used", k);
+        }
+    }
+}
+
 pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
-    let blocks = match parse_lines(input) {
+    let mut blocks = match parse_lines(input) {
         Ok(blocks) => blocks,
         Err(e) => {
             return Err(e);
         }
     };
 
-    let config = match Config::new(blocks) {
+    let config = match Config::new(&mut blocks) {
         Ok(config) => config,
         Err(e) => {
             return Err(e
@@ -550,6 +673,8 @@ pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
                 .collect());
         }
     };
+    //dbg!(&blocks);
+    check_used_fields(&blocks);
 
     Ok(config)
 }

@@ -1,9 +1,6 @@
 use actix_web::{error, web::Json};
 use serde::Serialize;
-use std::{
-    fmt::{Debug, Display},
-    usize,
-};
+use std::fmt::{Debug, Display};
 
 use crate::parser::Position;
 
@@ -72,7 +69,9 @@ impl Display for LanguageErrorKind {
             LanguageErrorKind::MissingField(field) => write!(f, "Missing field '{}'", field),
             LanguageErrorKind::InvalidValue(value) => write!(f, "Invalid value '{}'", value),
             LanguageErrorKind::Generic(error) => write!(f, "{}", error),
-            LanguageErrorKind::IncorrectPanelName(name) => write!(f,"Undefined or misspelled panel variable '{}'",name),
+            LanguageErrorKind::IncorrectPanelName(name) => {
+                write!(f, "Undefined or misspelled panel variable '{}'", name)
+            }
             LanguageErrorKind::MissingSection(section) => {
                 write!(f, "Missing section '{}'", section)
             }
