@@ -26,8 +26,8 @@ first:
             42 is Zelking
             40 is Retz
             45 is Leobersdorf
-        token is 0309f94e6e214fc3bfa32142c89af3f90d4f5172f5674c7a8099dd4d75618929
-        company is 23
+        token is E65839fa0ba24f2bbbe8021f0a46a33ff67e388ac74741f59ca2538267b2bf4a
+        company is 12
 
 application:
     type is Web
