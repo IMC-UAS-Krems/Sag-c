@@ -10,7 +10,6 @@ first:
     type is SmartMeter
     provider is Dataskop
     uri is https://backend.dataskop.at/
-    query is AirQualityObserved
     config:
         measurements:
             1491 is Würnsdorf_Temperatur
