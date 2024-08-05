@@ -1,16 +1,18 @@
-FROM rust:1-buster AS build
+FROM --platform=linux/amd64 rust:1-slim AS build
 
 WORKDIR /app
 COPY . .
-RUN rustup target add x86_64-unknown-linux-musl
-RUN USER=root apt update && apt install -y musl-tools
+COPY Cargo.lock Cargo.lock
 
-# This is a dummy build to get the dependencies cached.
-RUN cargo build --target x86_64-unknown-linux-musl --release -p sagc
+RUN update-ca-certificates
+RUN apt-get update -y && apt-get install -y pkg-config libssl-dev
 
-FROM alpine:latest
+RUN CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
+cargo build --locked --target x86_64-unknown-linux-gnu	--release -p sagc
+
+FROM gcr.io/distroless/cc-debian12:latest
 
 WORKDIR /app
-COPY --from=build /app/target/x86_64-unknown-linux-musl/release/sagc .
+COPY --from=build /app/target/x86_64-unknown-linux-gnu/release/sagc .
 EXPOSE 8080
 CMD ["/app/sagc"]
