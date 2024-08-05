@@ -4,6 +4,7 @@ WORKDIR /app
 COPY . .
 COPY Cargo.lock Cargo.lock
 
+RUN update-ca-certificates
 RUN apt-get update -y && apt-get install -y pkg-config libssl-dev
 
 RUN CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
