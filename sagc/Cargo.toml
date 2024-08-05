@@ -22,7 +22,7 @@ actix-cors = "0.7.0"
 log = "0.4.20"
 rand = { version = "0.8.5", features = ["alloc"] }
 nom_locate = "4.2.0"
-awc = "3.4.0"
+awc = {version = "3.4.0", features = ["openssl"]}
 nom-unicode = "0.3.0"
 
 [dev-dependencies]
