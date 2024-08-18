@@ -1,0 +1,94 @@
+data:
+    sources -> first
+
+first:
+    type is SmartMeter
+    provider is Fiware
+    uri is https://data.iiss.at/dataskop/fiwarenosec/v2/entities
+    query is AirQualityObserved
+    config:
+        measurements:
+            450 is temperature
+            330 is humidity
+        token is 1234567890
+        company is 23
+
+application:
+    type is Web
+    dashboard is Grafana
+    layout is SinglePage
+    roles -> User, SuperUser, Admin
+    panels -> Map, Pie, XY, TS, Bar, SCMapPanel, SingleLine, MultiLine, ExtremeValues, Calendar, BnB
+
+Map:
+    label is map
+    type is geomap
+    source is first
+    data -> location, stationName, O3, NO2, SO2, address
+
+Pie:
+    label is pie
+    type is pie_chart
+    source is first
+    traces -> NOx, O3, NO2, SO2, id
+    pie_chart_type is pie
+
+XY:
+    label is xy
+    type is xy_chart
+    source is first
+    traces -> dateObserved, NOx, O3, NO2, SO2, id
+
+TS:
+    label is ts
+    type is timeseries
+    source is first
+    traces -> dateObserved, NOx, O3, NO2, SO2, id
+
+Bar:
+    label is bar
+    type is bar_chart
+    source is first
+    traces -> dateObserved, NOx, O3, NO2, SO2, id
+
+SCMapPanel:
+    type is smartcomm-map-panel
+    source is first
+    traces -> location, stationName, O3, NO2, SO2, address
+
+SingleLine:
+    type is smartcomm-simpleline-panel
+    source is first
+    traces -> dateObserved, NOx
+
+MultiLine:
+    type is smartcomm-multiplelinechart-panel
+    source is first
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
+    traces -> dateObserved, NOx, O3, NO2
+
+ExtremeValues:
+    type is smartcomm-extremevalues-panel
+    source is first
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
+    traces -> NOx, O3, NO2, SO2
+
+Calendar:
+    type is smartcomm-calendar-panel
+    source is first
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
+    traces -> dateObserved, CO, NO, NOx, O3
+
+BnB:
+    type is smartcomm-bars-and-bubbles
+    source is first
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
+    traces -> dateObserved, NOx, O3, NO2
+
+deployment:
+    environments -> local
+
+local:
+    uri is https://localhost.org:3000/test
+    port is 50055
+    type is Docker
