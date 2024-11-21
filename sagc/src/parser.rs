@@ -17,12 +17,12 @@ use std::collections::HashMap;
 
 type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;
 type IResultVec<'a> = nom::IResult<Span<'a>, Vec<Token<'a>>>;
-type Span<'a> = LocatedSpan<&'a str>;
+pub type Span<'a> = LocatedSpan<&'a str>;
 //pub type Blocks<'a> = HashMap<&'a str, ParseResult<'a>>;
 
 #[derive(Debug)]
 pub struct Blocks<'a> {
-    blocks: HashMap<&'a str, ParseResult<'a>>,
+    pub blocks: HashMap<&'a str, ParseResult<'a>>,
 }
 
 impl<'a> Blocks<'a> {
@@ -108,9 +108,9 @@ pub enum TokenValue<'a> {
 }
 
 #[derive(Debug)]
-struct Token<'a> {
-    position: Position,
-    value: TokenValue<'a>,
+pub struct Token<'a> {
+    pub position: Position,
+    pub value: TokenValue<'a>,
 }
 
 #[derive(Debug)]
@@ -121,7 +121,7 @@ pub struct ParseResult<'a> {
 }
 
 impl ParseResult<'_> {
-    fn new(position: Position, value: Value<'_>) -> ParseResult<'_> {
+    pub fn new(position: Position, value: Value<'_>) -> ParseResult<'_> {
         ParseResult {
             position,
             value,
@@ -206,7 +206,7 @@ impl<'a> TryInto<HashMap<usize, &'a str>> for &mut Value<'a> {
 }
 
 /// Handle error in the lexer. Error is everythig from error location to the end of the line
-fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
+pub fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     match error {
         TokenValue::IndentError | TokenValue::UnparsableError => (),
         _ => unreachable!("No, no, no... Do not do this"),
@@ -238,7 +238,7 @@ fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     })
 }
 
-fn parse_block_name(input: Span) -> IResult {
+pub fn parse_block_name(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
@@ -438,7 +438,7 @@ fn parse_whitespace_line(input: Span) -> nom::IResult<Span, Span> {
     }
 }
 
-fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
+pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut input = input;
     let mut tokens = Vec::new();
     let mut errors = Vec::new();
@@ -539,7 +539,7 @@ fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
 }
 
 /// Convert tokens to HashMap for easy access
-fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
+pub fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
     let mut blocks = Blocks::new();
     // vec to track keys of blocks, e.g ["a", "b", "c"] -> a.b.c
     let mut last_blocks: Vec<&str> = Vec::new();
