@@ -429,7 +429,7 @@ impl<'a> Service<'a> {
         Ok((title.unwrap(), scope.unwrap(), version.unwrap()))
     }
 
-    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let (title, scope, version) = Service::check(blocks)?;
 
         Ok(Service {
@@ -478,7 +478,7 @@ impl<'a> SagData<'a> {
         Ok(data_sources)
     }
 
-    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         const SECTION_NAME: &str = "data";
 
         let mut errors = Vec::new();
@@ -638,7 +638,7 @@ impl<'a> Datasource<'a> {
         ))
     }
 
-    fn new(
+    pub fn new(
         blocks: &mut Blocks<'a>,
         source_name: &'a str,
         source_name_position: Position,
@@ -723,7 +723,7 @@ impl<'a> DatasourceConfig<'a> {
         )))
     }
 
-    fn new(block: &mut ParseResult<'a>) -> Result<Option<Self>, Vec<SagError>> {
+    pub fn new(block: &mut ParseResult<'a>) -> Result<Option<Self>, Vec<SagError>> {
         let result = DatasourceConfig::check(block)?;
         if let Some((company, measurements, token)) = result {
             return Ok(Some(DatasourceConfig {
@@ -852,7 +852,7 @@ impl<'a> Application<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let (r#type, dashboard, layout, roles, panels) = Application::check(blocks)?;
         let mut errors = Vec::new();
 
@@ -963,7 +963,7 @@ impl<'a> PanelTypeUnion<'a> {
         Ok(panel_type.unwrap())
     }
 
-    fn new(
+    pub fn new(
         blocks: &mut Blocks<'a>,
         block_name: &'a str,
         block_ref_position: Position,
@@ -1069,7 +1069,7 @@ impl<'a> GeoMap<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, data, area) = GeoMap::check(blocks, block_name)?;
 
         Ok(GeoMap {
@@ -1132,7 +1132,7 @@ impl<'a> GrafanaMap<'a> {
         Ok((r#type.unwrap(), source.unwrap(), traces.unwrap()))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, traces) = GrafanaMap::check(blocks, block_name)?;
 
         Ok(GrafanaMap {
@@ -1230,7 +1230,7 @@ impl<'a> PieChart<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces, pie_chart_type) = PieChart::check(blocks, block_name)?;
 
         Ok(PieChart {
@@ -1304,7 +1304,7 @@ impl<'a> BarChart<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces) = BarChart::check(blocks, block_name)?;
 
         Ok(BarChart {
@@ -1377,7 +1377,7 @@ impl<'a> TimeSeries<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces) = TimeSeries::check(blocks, block_name)?;
 
         Ok(TimeSeries {
@@ -1450,7 +1450,7 @@ impl<'a> XYChart<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (label, r#type, source, traces) = XYChart::check(blocks, block_name)?;
 
         Ok(XYChart {
@@ -1512,7 +1512,7 @@ impl<'a> GrafanaSingleLine<'a> {
         Ok((r#type.unwrap(), source.unwrap(), traces.unwrap()))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, traces) = GrafanaSingleLine::check(blocks, block_name)?;
 
         Ok(GrafanaSingleLine {
@@ -1587,7 +1587,7 @@ impl<'a> GrafanaMultiLine<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaMultiLine::check(blocks, block_name)?;
 
         Ok(GrafanaMultiLine {
@@ -1663,7 +1663,7 @@ impl<'a> GrafanaExtValues<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaExtValues::check(blocks, block_name)?;
 
         Ok(GrafanaExtValues {
@@ -1739,7 +1739,7 @@ impl<'a> GrafanaCalendar<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaCalendar::check(blocks, block_name)?;
 
         Ok(GrafanaCalendar {
@@ -1816,7 +1816,7 @@ impl<'a> GrafanaBulletGraph<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         dbg!("GrafanaBulletGraph::new");
         let (r#type, source, locations, traces) = GrafanaBulletGraph::check(blocks, block_name)?;
 
@@ -1864,7 +1864,7 @@ impl<'a> Deployment<'a> {
         Ok(environments.unwrap())
     }
 
-    fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>) -> Result<Self, Vec<SagError>> {
         let environments = Deployment::check(blocks)?;
         let mut errors = Vec::new();
 
@@ -1966,7 +1966,7 @@ impl<'a> Environment<'a> {
         Ok((uri.unwrap(), port.unwrap(), r#type.unwrap()))
     }
 
-    fn new(
+    pub fn new(
         blocks: &mut Blocks<'a>,
         block_name: &'a str,
         block_ref_pos: Position,
@@ -2041,7 +2041,7 @@ impl<'a> GrafanaBnB<'a> {
         ))
     }
 
-    fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
+    pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
         let (r#type, source, locations, traces) = GrafanaBnB::check(blocks, block_name)?;
 
         Ok(GrafanaBnB {
