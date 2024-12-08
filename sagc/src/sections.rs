@@ -268,7 +268,8 @@ pub struct Environment<'a> {
 
 #[derive(Debug)]
 pub enum EnvironmentType {
-    Docker,
+    Docker, 
+    Azure,
 }
 
 impl<'a> Config<'a> {
@@ -2278,6 +2279,7 @@ impl FromStr for EnvironmentType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "Docker" => Ok(EnvironmentType::Docker),
+            "Azure" => Ok(EnvironmentType::Azure),
             _ => Err(format!("invalid environment type: {}", s)),
         }
     }
@@ -2414,6 +2416,7 @@ impl Display for EnvironmentType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             EnvironmentType::Docker => write!(f, "Docker"),
+            EnvironmentType::Azure => write!(f, "Azure"),
         }
     }
 }
@@ -2532,6 +2535,7 @@ impl<'a> From<EnvironmentType> for &'a str {
     fn from(et: EnvironmentType) -> &'a str {
         match et {
             EnvironmentType::Docker => "Docker",
+            EnvironmentType::Azure => "Azure",
         }
     }
 }
