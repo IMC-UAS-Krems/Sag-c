@@ -32,6 +32,7 @@ struct DeployPayload {
     source: String,
     user_id: String,
     dashboard_type: String,
+    deployments: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -149,6 +150,13 @@ async fn compile(
             DashboardType::Grafana => "grafana",
             DashboardType::Dash => "dash",
         };
+        let deployment_types = config
+            .deployment
+            .environments
+            .values()
+            .map(|env| env.r#type.to_string())
+            .collect();
+
         let deploy_layload: serde_json::Value = match config.application.dashboard {
             DashboardType::Grafana => {
                 let grafana_json: Grafana = Grafana::from(config);
@@ -163,11 +171,14 @@ async fn compile(
                 serde_json::json!(dash_json)
             }
         };
+
         let deploy_layload = DeployPayload {
             source: deploy_layload.to_string(),
             user_id: input.user_id.clone(),
             dashboard_type: dashboard_type.to_string(),
+            deployments: deployment_types,
         };
+
         let response = deploy(&client, &deploy_url.0, deploy_layload)
             .await
             .map_err(CompileError::General)?;
