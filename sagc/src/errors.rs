@@ -12,6 +12,15 @@ pub enum SagError {
     InternalError(String),
 }
 
+pub struct ImportError {
+    error: String,
+    filename: String,
+    line_start: usize,
+    column_start: usize,
+    line_end: usize,
+    column_end: usize,
+}
+
 // new
 #[derive(Serialize)]
 pub struct ParsingError {
