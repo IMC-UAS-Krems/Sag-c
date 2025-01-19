@@ -29,7 +29,6 @@ pub type Span<'a> = LocatedSpan<&'a str>; // adds location information to the in
 type IResult<'a> = nom::IResult<Span<'a>, Token<'a>>;  // input: Span, output: Token
 type IResultVec<'a> = nom::IResult<Span<'a>, Vec<Token<'a>>>; // input: Span, output: Vec<Token>
 
-// represents a token in the context of lexer
 #[derive(Debug)]
 pub struct Token<'a> {
     pub position: Position,
@@ -43,8 +42,6 @@ pub struct Position {
     pub col_start: usize,
     pub col_end: usize,
 }
-
-const INDENT: usize = 4; // indent size
 
 // represents the value of a token
 #[derive(Debug)]
@@ -222,7 +219,7 @@ impl<'a> TryInto<Vec<&'a str>> for &mut Value<'a> {
     }
 }
 
-// converts Value into HashMap<usize, &'a str>
+// converts Value into HashMap<usize, &'a str> if Value is a block
 impl<'a> TryInto<HashMap<usize, &'a str>> for &mut Value<'a> {
     type Error = &'a str;
     fn try_into(self) -> Result<HashMap<usize, &'a str>, Self::Error> {
@@ -245,7 +242,9 @@ impl<'a> TryInto<HashMap<usize, &'a str>> for &mut Value<'a> {
     }
 }
 
-/// handles error in the lexer. Error is everythig from error location to the end of the line
+// -----------Section 3: Parsing Functions-----------
+
+// returns rest of the input and token with error value
 pub fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     
     match error {
@@ -253,13 +252,12 @@ pub fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
         _ => unreachable!("No, no, no... Do not do this"),
     }
 
-    let line = input.location_line() as usize; // get the current line (row) number
-    let col_start = input.get_column(); // get the current column number
+    let line = input.location_line() as usize;
+    let col_start = input.get_column();
 
-    // reads the input till the end of the line, returns remaining input of the read 
-    // and result is the line of the next read
+    // reads the input till the end of the line, input: second line, result: first line
     take_while(|c| !(c == '\r' || c == '\n'))(input).map(|(input, result) | {
-        // updates input to the remaining input after these characters are consumed
+        // stores the second line in the input
         let (input, _) =
             take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>> (|c| {
                 c == '\n' || c == '\r'
@@ -272,9 +270,8 @@ pub fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
             col_end: col_start + result.len() - 1,
         };
         
-        // return the input and the token
         (
-            input,
+            input,  // returns the second line
             Token {
                 position,
                 value: error,
@@ -283,10 +280,9 @@ pub fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     })
 }
 
-// returns the block name of an input
+// returns the rest of the input and token with block name
 pub fn parse_block_name(input: Span) -> IResult {
 
-    // get the column and row number of the input
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
@@ -314,12 +310,12 @@ pub fn parse_block_name(input: Span) -> IResult {
     })
 }
 
-// returns the section name of an input
+// returns the rest of the input and token with section name
 fn parse_section_name(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
-    // it either matches alpahnumeric1 or _
+    // parses alpahnumeric or _ till end of the line
     recognize(many1_count(alt((alphanumeric1, tag("_")))))(input).map(|(input, result)| {
         let position = Position {
             row_start: line,
@@ -337,13 +333,13 @@ fn parse_section_name(input: Span) -> IResult {
     })
 }
 
-// parses is or -> separator
+// returns the rest of the input and token with separator (-> or is)
 fn parse_separator(input: Span) -> IResult {
 
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
-    alt((
+    alt((   // find separators surounded by spaces
         delimited(space1, tag("->"), space1),
         delimited(space1, tag("is"), space1),
     ))(input)
@@ -369,16 +365,17 @@ fn parse_separator(input: Span) -> IResult {
     })
 }
 
-// parses a comma separated list of values and stores them in a vector
+// returns the rest of the input (empty) and token with vector value
 fn parse_vec(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
 
+    // parses a list of values separated by commas
     separated_list0(
         alt((tag(", "), tag(","))),
         recognize(many1_count(alt((
             alphanumeric1,
-            space1, // NOTE: this gives error on the separator `, `
+            space1,  // NOTE: this gives error on the separator `, `
             tag("."),
             tag("_"),
         )))),
@@ -402,7 +399,7 @@ fn parse_vec(input: Span) -> IResult {
     })
 }
 
-// parses a line of value
+// returns the rest of the input and token with value
 fn parse_value(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
@@ -424,7 +421,7 @@ fn parse_value(input: Span) -> IResult {
     })
 }
 
-// parse a line of text that consist of a section name, separator and either a value or a vector
+// parses a line of the input
 fn parse_section_line(input: Span) -> IResultVec {
     let mut to_return = Vec::new();
 
@@ -451,7 +448,9 @@ fn parse_section_line(input: Span) -> IResultVec {
     Ok((input, to_return))
 }
 
-// parses the indentation of the input
+const INDENT: usize = 4; // indent size
+
+// returns the rest of the input and token with indent value
 fn parse_indent(input: Span) -> IResult {
     let line = input.location_line();
     let column = input.get_column();
@@ -488,7 +487,7 @@ fn seek_to_input(input: Span) -> Span {
     }
 }
 
-// parse a line of whitespace
+// parse a line of only whitespace
 fn parse_whitespace_line(input: Span) -> nom::IResult<Span, Span> {
     let result = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(|c| {
         c == ' ' || c == '\t'
@@ -500,7 +499,9 @@ fn parse_whitespace_line(input: Span) -> nom::IResult<Span, Span> {
     }
 }
 
-// tokenize the input, handling identation and parsing.
+// -----------Section 4: lexer and tokenization-----------
+// TODO: continue from here
+// tokenize the input
 pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut input = input;
     let mut tokens = Vec::new();
