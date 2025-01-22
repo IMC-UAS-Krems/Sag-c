@@ -67,12 +67,10 @@ pub struct ImportFile<'a> {
     pub content: File,
 }
 
-pub fn substitute_imports(target: File, imports: Vec<ImportFile>) -> io::Result<String> {
-    let reader = BufReader::new(target);
+pub fn substitute_imports(target: &str, imports: Vec<ImportFile>) -> io::Result<String> {
     let mut result = String::new();
     
-    for line in reader.lines() {
-        let line = line?;
+    for line in target.lines() {
         if line.starts_with("#import") {
             let import_path = line[7..].trim(); //TODO use 'check_import'
             match custom_open(Either::_path(import_path.to_string())) {
@@ -93,6 +91,7 @@ pub fn postprocess_errors() {
     // if error is located in an imported file, change the error message
 }
 
+/*
 fn main(){
     let file = match File::open("sagc/import_test.ssd") {
         Ok(file) => file,
@@ -119,7 +118,7 @@ fn main(){
     let f:ImportFile = ImportFile{name:"test", content:file2};
     check_import(f, 12);
 }
-
+*/
 /*TODOs
 
 1. make substitution function take vector of file contents

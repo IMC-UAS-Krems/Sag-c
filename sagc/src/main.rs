@@ -271,17 +271,10 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
     Err(errors)
 }
 
-#[get("/test/import")]
-async fn import_test() -> Result<impl Responder, Error> {
-    let file = match File::open("sagc/import_test.ssd") {
-        Ok(file) => file,
-        Err(e) => {
-            eprintln!("Error opening file: {}", e);
-            panic!();
-        }
-    };
+#[post("/test/import")]
+async fn import_test(input: web::Json<Input>) -> Result<impl Responder, Error> {
     let files: Vec<ImportFile> = Vec::new();
-    let res = substitute_imports(file, files);
+    let res = substitute_imports(input.source.as_str(), files);
     res
 }
 
