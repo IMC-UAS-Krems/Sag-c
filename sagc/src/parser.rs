@@ -500,7 +500,7 @@ fn parse_whitespace_line(input: Span) -> nom::IResult<Span, Span> {
 }
 
 // -----------Section 4: lexer and tokenization-----------
-// TODO: continue from here
+
 // tokenize the input
 pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut input = input;
@@ -521,27 +521,29 @@ pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
         match result {
             Ok((i, token)) => {
                 input = i;
+                // updates last_indent with the current indent
                 last_indent = match token.value {
                     TokenValue::Indent(indent) => indent,
                     _ => unreachable!(),
                 };
                 tokens.push(token);
 
+                // if the line consists of white spaces/tabs, continue
                 if let Ok((i, _)) = parse_whitespace_line(input) {
                     input = i;
                     continue;
                 }
             }
             Err(_) => {
-                //check if the line only consists of spaces or tabs
+                // check if the line only consists of spaces or tabs
                 let white_parse = parse_whitespace_line(input);
                 match white_parse {
-                    //if yes continue as usual
+                    // if yes continue as usual
                     Ok((i, _)) => {
                         input = i;
                         continue;
                     }
-                    //if not push an error
+                    // if not push an error
                     Err(_) => {
                         let (i, token) = handle_error(input, TokenValue::IndentError).unwrap();
                         input = i;
@@ -567,6 +569,7 @@ pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
         let result = parse_section_line(input);
         match result {
             Ok((i, token)) => {
+                // push an indentation error if it is wrong
                 if last_indent == 0
                     || last_indent - last_block_indent > 1
                     || first_field_indent && last_indent - last_block_indent != 1
@@ -674,8 +677,10 @@ pub fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
                             TokenValue::ValueStr(value) => value,
                             _ => unreachable!(),
                         };
-                        current_block
-                            .insert(name, ParseResult::new(token.position, Value::String(value)));
+                        current_block.insert(
+                            name, 
+                            ParseResult::new(token.position, Value::String(value)),
+                        );
                     }
 
                     _ => unreachable!(),
@@ -710,6 +715,7 @@ fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
     }
 }
 
+/// log any fields that have not been accessed in the blocks
 fn check_used_fields(blocks: &Blocks<'_>) {
     for (k, v) in blocks.iter() {
         if let Value::Block(b) = &v.value {
@@ -721,6 +727,7 @@ fn check_used_fields(blocks: &Blocks<'_>) {
     }
 }
 
+/// parsing input and returning Config object
 pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
     let mut blocks = match parse_lines(input) {
         Ok(blocks) => blocks,
