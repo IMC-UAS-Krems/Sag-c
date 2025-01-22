@@ -1,8 +1,8 @@
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
-// use sagc::parser::Span; TODO fix
-// use sagc::errors::ImportErrors;
+use crate::parser::Span;
+use crate::errors::ImportError;
 
 pub enum Either<F, P> {
     _file(F),

@@ -16,6 +16,11 @@ use sagc::parser::{parse_input, Position};
 use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
 
+//-----IMPORTS FOR TESTING------
+use std::fs::File;
+use sagc::preprocessing::{substitute_imports, ImportFile};
+use std::io::Error;
+
 #[derive(Debug, Clone)]
 struct GrafanaUri(Uri);
 #[derive(Debug, Clone)]
@@ -266,6 +271,20 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
     Err(errors)
 }
 
+#[get("/test/import")]
+async fn import_test() -> Result<impl Responder, Error> {
+    let file = match File::open("sagc/import_test.ssd") {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("Error opening file: {}", e);
+            panic!();
+        }
+    };
+    let files: Vec<ImportFile> = Vec::new();
+    let res = substitute_imports(file, files);
+    res
+}
+
 #[get("/status")]
 async fn status() -> impl Responder {
     const STATUSES: [&str; 5] = [
@@ -319,6 +338,7 @@ async fn main() -> std::io::Result<()> {
             .service(index)
             .service(compile)
             .service(test)
+            .service(import_test)
             .wrap(Logger::default())
     })
     .bind(("0.0.0.0", 8080))?
