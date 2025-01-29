@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 //-----IMPORTS FOR TESTING------
 use std::fs::File;
-use sagc::preprocessing::{substitute_imports, ImportFile};
+use sagc::preprocessing::{substitute_imports, ImportFileContent};
 use std::io::Error;
 
 #[derive(Debug, Clone)]
@@ -273,8 +273,10 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
 
 #[post("/test/import")]
 async fn import_test(input: web::Json<Input>) -> Result<impl Responder, Error> {
-    let files: Vec<ImportFile> = Vec::new();
-    let res = substitute_imports(input.source.as_str(), files);
+    let mut files: Vec<ImportFileContent> = Vec::new();
+    files.push(ImportFileContent{name:"a", content:"aa"});
+    files.push(ImportFileContent{name:"b", content:"bbb"});
+    let res = substitute_imports(&input.source.as_str(), &files);
     res
 }
 

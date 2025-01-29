@@ -1,5 +1,5 @@
-use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::fs::{File, read_to_string};
+use std::io::{self, BufRead, BufReader, Error, ErrorKind};
 use std::path::Path;
 use crate::parser::Span;
 use crate::errors::ImportError;
@@ -67,21 +67,38 @@ pub struct ImportFile<'a> {
     pub content: File,
 }
 
-pub fn substitute_imports(target: &str, imports: Vec<ImportFile>) -> io::Result<String> {
+#[derive(Debug)]
+pub struct ImportFileContent<'a> {
+    pub name: &'a str,
+    pub content: &'a str,
+}
+
+pub fn search_files(name: &str, files: &[ImportFileContent]) -> io::Result<String> {
+    for f in files {
+        if name == f.name {
+            println!("{:?}", f);
+            return Ok(f.content.to_string());
+        }
+    }
+    Err(Error::new(ErrorKind::NotFound, format!("File '{}' not found", name)))
+}
+
+pub fn substitute_imports(target: &str, imports: &[ImportFileContent]) -> io::Result<String> {
     let mut result = String::new();
     
     for line in target.lines() {
         if line.starts_with("#import") {
-            let import_path = line[7..].trim(); //TODO use 'check_import'
-            match custom_open(Either::_path(import_path.to_string())) {
-                Ok(imported_content) => result.push_str(&imported_content),
-                Err(e) => eprintln!("Error importing {}: {}", import_path, e),
+            let import_name = line[7..].trim(); // TODO use 'check_import'
+            let import_content = search_files(import_name, &imports); // Pass reference
+            match import_content {
+                Ok(content) => result.push_str(&format!("{}\n",content)),
+                Err(e) => eprintln!("Error importing {}: {}", import_name, e),
             }
         } else {
             result.push_str(&format!("{}\n", line));
         }
     }
-    
+
     println!("{}", result);
     Ok(result)
 }
@@ -90,6 +107,29 @@ pub fn postprocess_errors() {
     // parse through errors and logs
     // if error is located in an imported file, change the error message
 }
+
+fn main(){
+    let mut files: Vec<ImportFileContent> = Vec::new();
+    files.push(ImportFileContent{name:"a", content:"aa"});
+    files.push(ImportFileContent{name:"b", content:"bbb"});
+    println!("{:?}", files);
+
+    // Test search_files
+    let test = "a";
+    println!("{:?}", search_files(test, &files)); // Pass reference
+
+    let file = read_to_string("sagc/import_test.ssd");
+    match file {
+        Ok(content) => {
+            println!("{:?}", content);
+            println!("{:?}", substitute_imports(&content, &files)); // Pass content as &str
+        }
+        Err(e) => {
+            eprintln!("Error reading file: {}", e);
+        }
+    }
+}
+
 
 /*
 fn main(){
