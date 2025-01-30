@@ -291,6 +291,47 @@ async fn import_test(input: web::Json<Input>) -> Result<String> {
     }
 }
 
+#[post("/test/grafana")]
+async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
+
+    let mut files: Vec<ImportFileContent> = Vec::new(); //mock DB ---> this should be provided in advance
+    files.push(ImportFileContent { name: "BnB", content: "BnB:
+    type is smartcomm-minmaxbarchart-panel
+    source is first
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
+    traces -> dateObserved, NOx, O3, NO2" });
+    files.push(ImportFileContent { name: "import", content: "#import mock" }); //mock for nested imports to trigger an error
+
+    match substitute_imports(input.source.as_str(), &files) {
+        Ok(preprocessed_source) => {
+            // Parse the preprocessed input
+            let result = parse_input(&preprocessed_source);
+
+            if let Ok(parsed_config) = result {
+                let g: Grafana = Grafana::from(parsed_config);
+                log::info!("Grafana app compiled successfully!");
+                return Ok(Json(g)); // Ensure `Grafana` implements Serialize
+            }
+
+            // If parsing fails, return error
+            let error = WebErrorPosition {
+                status: "error".to_string(),
+                errors: result.err().unwrap(),
+            };
+            Err(error)
+        }
+        Err(errors) => {
+            // Handle preprocessing errors
+            let error = WebErrorPosition {
+                status: "error".to_string(),
+                errors,
+            };
+            Err(error)
+        }
+    }
+}
+
+
 #[get("/status")]
 async fn status() -> impl Responder {
     const STATUSES: [&str; 5] = [
@@ -345,6 +386,7 @@ async fn main() -> std::io::Result<()> {
             .service(compile)
             .service(test)
             .service(import_test)
+            .service(testgrafana)
             .wrap(Logger::default())
     })
     .bind(("0.0.0.0", 8080))?
