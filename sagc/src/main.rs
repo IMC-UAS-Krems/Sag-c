@@ -4,7 +4,7 @@ use std::time::Duration;
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::web::{self, Json};
-use actix_web::{get, post, App, HttpServer, Responder, Result};
+use actix_web::{get, post, App, HttpServer, Responder, Result, error::ErrorInternalServerError};
 use awc::http::Uri;
 use awc::Client;
 use rand::seq::IteratorRandom;
@@ -272,12 +272,23 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
 }
 
 #[post("/test/import")]
-async fn import_test(input: web::Json<Input>) -> Result<impl Responder, Error> {
+async fn import_test(input: web::Json<Input>) -> Result<String> {
     let mut files: Vec<ImportFileContent> = Vec::new();
-    files.push(ImportFileContent{name:"a", content:"aa"});
-    files.push(ImportFileContent{name:"b", content:"bbb"});
-    let res = substitute_imports(&input.source.as_str(), &files);
-    res
+    files.push(ImportFileContent { name: "a", content: "#import ghj" });
+    files.push(ImportFileContent { name: "b", content: "bbb" });
+
+    match substitute_imports(&input.source, &files) {
+        Ok(res) => Ok(res),
+        Err(errors) => {
+
+            let error_message = errors.iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            Err(ErrorInternalServerError(error_message))
+        }
+    }
 }
 
 #[get("/status")]

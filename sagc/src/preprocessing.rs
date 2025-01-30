@@ -1,64 +1,19 @@
 use std::fs::{File, read_to_string};
 use std::io::{self, BufRead, BufReader, Error, ErrorKind};
 use std::path::Path;
-use crate::parser::Span;
-use crate::errors::ImportError;
-
-pub enum Either<F, P> {
-    _file(F),
-    _path(P),
-}
-
-pub fn custom_open<P: AsRef<Path>>(input: Either<File, P>) -> io::Result<String> {
-    //helper for opening irregardles of type
-    let file = match input {
-        Either::_file(file) => file,
-        Either::_path(path) => File::open(path)?
-    };
-    
-    let reader = BufReader::new(file);
-    let mut result = String::new();
-    
-    for line in reader.lines() {
-        result.push_str(&format!("{}\n", line?));
-    }
-    
-    Ok(result)
-}
-
-pub fn check_import(content: ImportFile, position: i16) -> io::Result<ImportLog> {
-    //TODO fix typing
-    let reader = BufReader::new(content.content);
-    let mut nlines: i16 = 0;
-
-    for line in reader.lines() {
-        let line = line?;
-        if line.starts_with("#import") {
-            //TODO change handling
-            panic!("Import file contains an import statement");
-            Err::<ImportLog,&str>("Imported file contains further imports"); //alternatively recurse?
-        } else {
-            nlines += 1;
-        }
-    }
-
-    let log: ImportLog = ImportLog{filename: content.name, line: position, length: nlines};
-    println!{"filename {}", content.name};
-    println!{"line {}", position};
-    println!{"len {}", nlines};
-    Ok(log)
-} 
+use crate::parser::{Span, Position};
+use crate::errors::{ImportError, ImportErrorKind, SagError};
 
 #[derive(Debug)]
-pub struct ImportLog<'a> {
-    pub filename: &'a str,
-    pub line: i16,
-    pub length: i16,
+pub struct ImportLog {
+    pub filename: String,
+    pub line: usize,
+    pub length: usize,
 }
 
 #[derive(Debug)]
-pub struct ImportLogs<'a> {
-    pub imported: Vec<ImportLog<'a>>,
+pub struct ImportLogs {
+    pub imported: Vec<ImportLog>,
 }
 
 #[derive(Debug)]
@@ -73,35 +28,79 @@ pub struct ImportFileContent<'a> {
     pub content: &'a str,
 }
 
-pub fn search_files(name: &str, files: &[ImportFileContent]) -> io::Result<String> {
+pub fn search_files(name: &str, pos: Position, files: &[ImportFileContent]) -> Result<String, SagError> {
     for f in files {
         if name == f.name {
             println!("{:?}", f);
             return Ok(f.content.to_string());
         }
     }
-    Err(Error::new(ErrorKind::NotFound, format!("File '{}' not found", name)))
+    Err(SagError::import_error(ImportErrorKind::MissingImport(name.to_string()),pos))
 }
 
-pub fn substitute_imports(target: &str, imports: &[ImportFileContent]) -> io::Result<String> {
-    let mut result = String::new();
-    
-    for line in target.lines() {
+pub fn check_import(content: &str, filename: String, pos_in_file: usize, pos: Position) -> Result<ImportLog, Vec<SagError>>  {
+    let mut nlines: usize = 0;
+    let mut errors = Vec::new();
+
+    for line in content.lines() {
         if line.starts_with("#import") {
+            errors.push(SagError::import_error(ImportErrorKind::NestedImport(filename.to_string()),pos))
+        } else {
+            nlines += 1;
+        }
+    }
+
+    if errors.is_empty() {
+        let log: ImportLog = ImportLog{filename: filename, line: pos_in_file, length: nlines};
+        Ok(log)
+    } else {
+        Err(errors)
+    }
+
+} 
+
+pub fn substitute_imports(target: &str, imports: &[ImportFileContent]) -> Result<String, Vec<SagError>> {
+    let mut result = String::new();
+    let mut errors = Vec::new(); 
+
+    let mut nlines: usize = 0;
+
+    for line in target.lines() {
+        nlines += 1;
+        if line.starts_with("#import") {
+            
+            let import_pos = Position { 
+                row_start: nlines, 
+                row_end: nlines, 
+                col_start: 0, 
+                col_end: line.len() 
+            };
+
             let import_name = line[7..].trim(); // TODO use 'check_import'
-            let import_content = search_files(import_name, &imports); // Pass reference
+
+            let import_content = search_files(import_name.clone(), import_pos, imports);
+            
             match import_content {
-                Ok(content) => result.push_str(&format!("{}\n",content)),
-                Err(e) => eprintln!("Error importing {}: {}", import_name, e),
+                Ok(content) => {
+                    match check_import(&content, import_name.to_string(), nlines, import_pos) {
+                        Ok(response) => result.push_str(&format!("{}\n", content)),
+                        Err(mut e) => errors.append(&mut e),
+                    }
+                }
+                Err(e) => errors.push(e),
             }
         } else {
             result.push_str(&format!("{}\n", line));
         }
     }
 
-    println!("{}", result);
-    Ok(result)
+    if errors.is_empty() {
+        Ok(result)
+    } else {
+        Err(errors)
+    }
 }
+
 
 pub fn postprocess_errors() {
     // parse through errors and logs
@@ -113,10 +112,6 @@ fn main(){
     files.push(ImportFileContent{name:"a", content:"aa"});
     files.push(ImportFileContent{name:"b", content:"bbb"});
     println!("{:?}", files);
-
-    // Test search_files
-    let test = "a";
-    println!("{:?}", search_files(test, &files)); // Pass reference
 
     let file = read_to_string("sagc/import_test.ssd");
     match file {
