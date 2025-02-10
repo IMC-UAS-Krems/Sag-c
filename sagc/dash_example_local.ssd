@@ -9,14 +9,8 @@ data:
 first:
     type is SmartMeter
     provider is Fiware
-    uri is https://localhost:1026/v2/entities
+    uri is http://localhost:1026/v2/entities
     query is AirQualityObserved
-    config:
-        measurements:
-            450 is temperature
-            330 is humidity
-        token is 1234567890
-        company is 23
 
 application:
     type is Web
