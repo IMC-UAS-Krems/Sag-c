@@ -1,9 +1,14 @@
+/* This file defines functions and structures for handling file imports and substitutions in a configuration system */
+
 use std::fs::{File, read_to_string};
 use std::io::{self, BufRead, BufReader, Error, ErrorKind};
 use std::path::Path;
 use crate::parser::{Span, Position};
 use crate::errors::{ImportError, ImportErrorKind, SagError};
 
+/* -----------Section 1: Defining Structs and Enums----------- */
+
+/// represents log details of the imported file
 #[derive(Debug)]
 pub struct ImportLog {
     pub filename: String,
@@ -11,23 +16,29 @@ pub struct ImportLog {
     pub length: usize,
 }
 
+/// represents a collection of import logs
 #[derive(Debug)]
 pub struct ImportLogs {
     pub imported: Vec<ImportLog>,
 }
 
+/// represents an import file with its name and content
 #[derive(Debug)]
 pub struct ImportFile<'a> {
     pub name: &'a str,
     pub content: File,
 }
 
+/// represents the content of an imported file
 #[derive(Debug)]
 pub struct ImportFileContent<'a> {
     pub name: &'a str,
     pub content: &'a str,
 }
 
+/* -----------Section 2: Defining Functions----------- */
+
+/// searches for a file by name in a list of import files contents and returns the content if found
 pub fn search_files(name: &str, pos: Position, files: &[ImportFileContent]) -> Result<String, SagError> {
     for f in files {
         if name == f.name {
@@ -38,6 +49,7 @@ pub fn search_files(name: &str, pos: Position, files: &[ImportFileContent]) -> R
     Err(SagError::import_error(ImportErrorKind::MissingImport(name.to_string()),pos))
 }
 
+/// checks the content of an imported file for nested imports and logs the details, returns ImportLog if successful
 pub fn check_import(content: &str, filename: String, pos_in_file: usize, pos: Position) -> Result<ImportLog, Vec<SagError>>  {
     let mut nlines: usize = 0;
     let mut errors = Vec::new();
@@ -59,10 +71,10 @@ pub fn check_import(content: &str, filename: String, pos_in_file: usize, pos: Po
 
 } 
 
+/// substitutes import statements in the target content with the actual content of the imported files.
 pub fn substitute_imports(target: &str, imports: &[ImportFileContent]) -> Result<String, Vec<SagError>> {
     let mut result = String::new();
     let mut errors = Vec::new(); 
-
     let mut nlines: usize = 0;
 
     for line in target.lines() {
@@ -83,7 +95,7 @@ pub fn substitute_imports(target: &str, imports: &[ImportFileContent]) -> Result
             match import_content {
                 Ok(content) => {
                     match check_import(&content, import_name.to_string(), nlines, import_pos) {
-                        Ok(response) => result.push_str(&format!("{}\n", content)),
+                        Ok(response) => result.push_str(&format!("{}\n", content)),  // if no errors, append the content to the result
                         Err(mut e) => errors.append(&mut e),
                     }
                 }
@@ -103,8 +115,11 @@ pub fn substitute_imports(target: &str, imports: &[ImportFileContent]) -> Result
 
 
 pub fn postprocess_errors() {
-    // parse through errors and logs
-    // if error is located in an imported file, change the error message
+    
+    /*  TODO: 
+        1. parse through errors and logs
+        2. if error is located in an imported file, change the error message
+    */
 }
 
 fn main(){
