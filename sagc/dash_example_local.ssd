@@ -1,0 +1,65 @@
+service:
+    title is Dash dashboard
+    version is 1.0.0
+    scope is Environment
+
+data:
+    sources -> first
+
+first:
+    type is SmartMeter
+    provider is Fiware
+    uri is https://localhost:1026/v2/entities
+    query is AirQualityObserved
+    config:
+        measurements:
+            450 is temperature
+            330 is humidity
+        token is 1234567890
+        company is 23
+
+application:
+    type is Web
+    dashboard is Dash
+    layout is SinglePage
+    roles -> User, SuperUser, Admin
+    panels -> Map, Pie, XY, TS, Bar
+
+Map:
+    label is map
+    type is geomap
+    source is first
+    data -> location, stationName, O3, NO2, SO2, address
+
+Pie:
+    label is pie
+    type is pie_chart
+    source is first
+    traces -> NOx, O3, NO2, SO2, id
+    pie_chart_type is pie
+
+XY:
+    label is xy
+    type is xy_chart
+    source is first
+    traces -> dateObserved, NOx, O3, NO2, SO2, id
+
+TS:
+    label is ts
+    type is timeseries
+    source is first
+    traces -> dateObserved, NOx, O3, NO2, SO2, id
+
+Bar:
+    label is bar
+    type is bar_chart
+    source is first
+    traces -> dateObserved, NOx, O3, NO2, SO2, id
+
+deployment:
+    environments -> local
+
+local:
+    uri is https://localhost.org:3000/test
+    port is 50055
+    type is Docker
