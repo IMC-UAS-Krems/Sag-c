@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 //pub type Blocks<'a> = HashMap<&'a str, ParseResult<'a>>;
 
-// -----------Section 1: Defining Types, Structs and Enums-----------
+/* -----------Section 1: Defining Types, Structs and Enums----------- */
 // This section contains the definitions of the types, structs and enums
 
 // type alias provides an alternative name for an exisiting type
@@ -79,18 +79,18 @@ pub enum Value<'a> {
     Block(Blocks<'a>),
 }
 
-// -----------Section 2: Implementation of Structs and Enums-----------
+/* -----------Section 2: Implementation of Structs and Enums----------- */
 
 impl<'a> Blocks<'a> {
 
-    // creates a new Blocks instance
+    /// creates a new Blocks instance
     pub fn new() -> Self {
         Blocks {
             blocks: HashMap::new(),
         }
     }
 
-    // borrows the blocks mutable with marking it as accessed
+    /// borrows the blocks mutable with marking it as accessed
     pub fn get_mut(&mut self, key: &str) -> Option<&mut ParseResult<'a>> {
         let v = self.blocks.get_mut(key);
         if let Some(v) = v {
@@ -100,7 +100,7 @@ impl<'a> Blocks<'a> {
         None
     }
 
-    // borrows the blocks immutable with marking it as accessed
+    /// borrows the blocks immutable with marking it as accessed
     pub fn get(&mut self, key: &str) -> Option<&ParseResult<'a>> {
         let v = self.blocks.get_mut(key);
         if let Some(v) = v {
@@ -110,7 +110,7 @@ impl<'a> Blocks<'a> {
         None
     }
 
-    // borrows the blocks mutable without marking it as accessed
+    /// borrows the blocks mutable without marking it as accessed
     pub fn get_mut_without_mark(&mut self, key: &str) -> Option<&mut ParseResult<'a>> {
         let v = self.blocks.get_mut(key);
         if let Some(v) = v {
@@ -119,7 +119,7 @@ impl<'a> Blocks<'a> {
         None
     }
 
-    // borrows the blocks immutable without marking it as accessed
+    /// borrows the blocks immutable without marking it as accessed
     pub fn get_without_mark(&mut self, key: &str) -> Option<&ParseResult<'a>> {
         let v = self.blocks.get_mut(key);
         if let Some(v) = v {
@@ -128,23 +128,23 @@ impl<'a> Blocks<'a> {
         None
     }
 
-    // inserts a key-value pair into the blocks
+    /// inserts a key-value pair into the blocks
     pub fn insert(&mut self, key: &'a str, value: ParseResult<'a>) {
         self.blocks.insert(key, value);
     }
 
-    // iters over the blocks
+    /// iters over the blocks
     pub fn iter(&self) -> std::collections::hash_map::Iter<&'a str, ParseResult<'a>> {
         self.blocks.iter()
     }
 
-    // iters over the blocks mutable
+    /// iters over the blocks mutable
     pub fn iter_mut(&mut self) -> std::collections::hash_map::IterMut<&'a str, ParseResult<'a>> {
         self.blocks.iter_mut()
     }
 }
 
-// default instance for Blocks
+/// default instance for Blocks
 impl<'a> Default for Blocks<'a> {
     fn default() -> Self {
         Self::new()
@@ -153,7 +153,7 @@ impl<'a> Default for Blocks<'a> {
 
 impl ParseResult<'_> {
 
-    // creates a new ParseResult instance
+    /// creates a new ParseResult instance
     pub fn new(position: Position, value: Value<'_>) -> ParseResult<'_> {
         ParseResult {
             position,
@@ -162,12 +162,12 @@ impl ParseResult<'_> {
         }
     }
 
-    // marks the value as accessed
+    /// marks the value as accessed
     pub fn mark_accessed(&mut self) {
         self.accessed = true;
     }
 
-    // checks if the value was accessed
+    /// checks if the value was accessed
     pub fn was_accessed(self) -> bool {
         self.accessed
     }
@@ -175,13 +175,13 @@ impl ParseResult<'_> {
 
 impl<'a> Value<'a> {
 
-    // matches if the value is a block
+    /// matches if the value is a block
     pub fn is_block(&self) -> bool {
         matches!(self, Value::Block(_))
     }
 }
 
-// converts Value into a string if Value is a string
+/// converts Value into a string if Value is a string
 impl<'a> TryInto<&'a str> for &mut Value<'a> {
     type Error = &'a str; // if conversion fails, return this error
  
@@ -193,7 +193,7 @@ impl<'a> TryInto<&'a str> for &mut Value<'a> {
     }
 }
 
-// converts Value into a usize if Value is a string
+/// converts Value into a usize if Value is a string
 impl<'a> TryInto<usize> for &mut Value<'a> {
     type Error = &'a str; // if conversion fails, return this error
 
@@ -207,7 +207,7 @@ impl<'a> TryInto<usize> for &mut Value<'a> {
     }
 }
 
-// converts Value into a Vec<&'a str> if Value is Vec
+/// converts Value into a Vec<&'a str> if Value is Vec
 impl<'a> TryInto<Vec<&'a str>> for &mut Value<'a> {
     type Error = &'a str; // if conversion fails, return this error
 
@@ -219,7 +219,7 @@ impl<'a> TryInto<Vec<&'a str>> for &mut Value<'a> {
     }
 }
 
-// converts Value into HashMap<usize, &'a str> if Value is a block
+/// converts Value into HashMap<usize, &'a str> if Value is a block
 impl<'a> TryInto<HashMap<usize, &'a str>> for &mut Value<'a> {
     type Error = &'a str;
     fn try_into(self) -> Result<HashMap<usize, &'a str>, Self::Error> {
@@ -242,9 +242,9 @@ impl<'a> TryInto<HashMap<usize, &'a str>> for &mut Value<'a> {
     }
 }
 
-// -----------Section 3: Parsing Functions-----------
+/* -----------Section 3: Parsing Functions----------- */
 
-// returns rest of the input and token with error value
+/// returns rest of the input and token with error value
 pub fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     
     match error {
@@ -280,7 +280,7 @@ pub fn handle_error<'a>(input: Span<'a>, error: TokenValue<'a>) -> IResult<'a> {
     })
 }
 
-// returns the rest of the input and token with block name
+/// returns the rest of the input and token with block name
 pub fn parse_block_name(input: Span) -> IResult {
 
     let line = input.location_line() as usize;
@@ -310,7 +310,7 @@ pub fn parse_block_name(input: Span) -> IResult {
     })
 }
 
-// returns the rest of the input and token with section name
+/// returns the rest of the input and token with section name
 fn parse_section_name(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
@@ -333,7 +333,7 @@ fn parse_section_name(input: Span) -> IResult {
     })
 }
 
-// returns the rest of the input and token with separator (-> or is)
+/// returns the rest of the input and token with separator (-> or is)
 fn parse_separator(input: Span) -> IResult {
 
     let line = input.location_line() as usize;
@@ -365,7 +365,7 @@ fn parse_separator(input: Span) -> IResult {
     })
 }
 
-// returns the rest of the input (empty) and token with vector value
+/// returns the rest of the input (empty) and token with vector value
 fn parse_vec(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
@@ -399,7 +399,7 @@ fn parse_vec(input: Span) -> IResult {
     })
 }
 
-// returns the rest of the input and token with value
+/// returns the rest of the input and token with value
 fn parse_value(input: Span) -> IResult {
     let line = input.location_line() as usize;
     let col_start = input.get_column();
@@ -421,7 +421,7 @@ fn parse_value(input: Span) -> IResult {
     })
 }
 
-// parses a line of the input
+/// parses a line of the input
 fn parse_section_line(input: Span) -> IResultVec {
     let mut to_return = Vec::new();
 
@@ -450,7 +450,7 @@ fn parse_section_line(input: Span) -> IResultVec {
 
 const INDENT: usize = 4; // indent size
 
-// returns the rest of the input and token with indent value
+/// returns the rest of the input and token with indent value
 fn parse_indent(input: Span) -> IResult {
     let line = input.location_line();
     let column = input.get_column();
@@ -478,7 +478,7 @@ fn parse_indent(input: Span) -> IResult {
     })
 }
 
-// skip over white spaces and line endings
+/// skip over white spaces and line endings
 fn seek_to_input(input: Span) -> Span {
     let result = many0::<_, _, nom::error::Error<Span>, _>(alt((space1, line_ending)))(input);
     match result {
@@ -487,7 +487,7 @@ fn seek_to_input(input: Span) -> Span {
     }
 }
 
-// parse a line of only whitespace
+/// parse a line of only whitespace
 fn parse_whitespace_line(input: Span) -> nom::IResult<Span, Span> {
     let result = take_while::<_, nom_locate::LocatedSpan<&str>, nom::error::Error<Span>>(|c| {
         c == ' ' || c == '\t'
@@ -499,9 +499,9 @@ fn parse_whitespace_line(input: Span) -> nom::IResult<Span, Span> {
     }
 }
 
-// -----------Section 4: lexer and tokenization-----------
+/* -----------Section 4: lexer and tokenization----------- */
 
-// tokenize the input
+/// tokenize the input
 pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     let mut input = input;
     let mut tokens = Vec::new();
@@ -606,24 +606,24 @@ pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     }
 }
 
-/// Convert tokens to HashMap for easy access
+/// converts tokens to HashMap for easy access
 pub fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
     let mut blocks = Blocks::new();
-    // vec to track keys of blocks, e.g ["a", "b", "c"] -> a.b.c
-    let mut last_blocks: Vec<&str> = Vec::new();
+    let mut last_blocks: Vec<&str> = Vec::new();  // vec to track keys of blocks, e.g ["a", "b", "c"] -> a.b.c
     let mut tokens = tokens.iter();
 
     // 3 main cases: indent, block, section
     while tokens.len() > 0 {
         let token = tokens.next().unwrap();
         match token.value {
-            TokenValue::Indent(indent) => {
+            TokenValue::Indent(indent) => {  // move back to the last block if indent is less than the last one
                 for _ in 0..last_blocks.len() - indent {
                     last_blocks.pop();
                 }
             }
 
-            TokenValue::Block(name) => {
+            // TODO: struggling to fully understand this part, a bit confused (Leen)
+            TokenValue::Block(name) => {   // if block, insert it into the blocks, update last_blocks
                 let current_block = last_blocks.iter().fold(blocks.borrow_mut(), |b, k| {
                     if let Value::Block(b) = b
                         .get_mut_without_mark(k)
@@ -643,7 +643,7 @@ pub fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
                 last_blocks.push(name);
             }
 
-            TokenValue::Section(name) => {
+            TokenValue::Section(name) => {  // if section, insert it into the blocks
                 let current_block = last_blocks.iter().fold(blocks.borrow_mut(), |b, k| {
                     if let Value::Block(b) = b
                         .get_mut_without_mark(k)
@@ -692,8 +692,9 @@ pub fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
     blocks
 }
 
+/// parses the input and returns heirarchial blocks, if errors, it returns a vector of `SagError` objects.
 fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
-    let input = Span::new(input);
+    let input = Span::new(input);  // converts into a Span, which includes position information.
     let result = lexer(input);
 
     match result {
