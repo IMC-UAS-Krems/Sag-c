@@ -515,7 +515,7 @@ pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
     // input = seek_to_input(input);
 
     loop {
-        let result = parse_indent(input);
+        let result = parse_indent(input); //check indentation (makes sure line is in correct position...)
 
         // if error, skip the line and continue
         match result {
@@ -526,13 +526,13 @@ pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
                     TokenValue::Indent(indent) => indent,
                     _ => unreachable!(),
                 };
-                tokens.push(token);
+                tokens.push(token); //if there was no error with indent -> add tokens
 
                 // if the line consists of white spaces/tabs, continue
-                if let Ok((i, _)) = parse_whitespace_line(input) {
-                    input = i;
+                if let Ok((i, _)) = parse_whitespace_line(input) { //check if the remainder consists of white chars only
+                    input = i; // if yes essentially do nothing and reset the information about indent to be as the last one
                     continue;
-                }
+                } //this needs to be here as well to catch "edge-cases"
             }
             Err(_) => {
                 // check if the line only consists of spaces or tabs
@@ -540,7 +540,7 @@ pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
                 match white_parse {
                     // if yes continue as usual
                     Ok((i, _)) => {
-                        input = i;
+                        input = i; //same as before if it matches a full whitspace line revert to last known indent
                         continue;
                     }
                     // if not push an error
@@ -555,12 +555,12 @@ pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
         }
 
         // if error, try to parse section line (like `alt` in nom)
-        if let Ok((i, result)) = parse_block_name(input) {
+        if let Ok((i, result)) = parse_block_name(input) { // mapping of the combination (remaining input, Token)
             input = i;
             last_block_indent = last_indent;
             first_field_indent = true;
             tokens.push(result);
-            if input.is_empty() {
+            if input.is_empty() { //input is what remains, so if its empty we break because the file is over
                 break;
             }
             continue;
@@ -568,7 +568,7 @@ pub fn lexer(input: Span) -> Result<Vec<Token>, Vec<Token>> {
         // final parser, either parse section line or handle error
         let result = parse_section_line(input);
         match result {
-            Ok((i, token)) => {
+            Ok((i, token)) => { // conditions describing wrong indentation, e.g cannot be a section line if indent is the same as last block name indent
                 // push an indentation error if it is wrong
                 if last_indent == 0
                     || last_indent - last_block_indent > 1

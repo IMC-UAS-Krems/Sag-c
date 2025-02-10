@@ -4,7 +4,7 @@ use std::time::Duration;
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::web::{self, Json};
-use actix_web::{get, post, App, HttpServer, Responder, Result};
+use actix_web::{get, post, App, HttpServer, Responder, Result, error::ErrorInternalServerError};
 use awc::http::Uri;
 use awc::Client;
 use rand::seq::IteratorRandom;
@@ -15,6 +15,11 @@ use sagc::grafana::Grafana;
 use sagc::parser::{parse_input, Position};
 use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
+
+//-----IMPORTS FOR TESTING------
+use std::fs::File;
+use sagc::preprocessing::{substitute_imports, ImportFileContent};
+use std::io::Error;
 
 #[derive(Debug, Clone)]
 struct GrafanaUri(Uri);
@@ -266,6 +271,67 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
     Err(errors)
 }
 
+#[post("/test/import")]
+async fn import_test(input: web::Json<Input>) -> Result<String> {
+    let mut files: Vec<ImportFileContent> = Vec::new();
+    files.push(ImportFileContent { name: "a", content: "#import ghj" });
+    files.push(ImportFileContent { name: "b", content: "bbb" });
+
+    match substitute_imports(&input.source, &files) {
+        Ok(res) => Ok(res),
+        Err(errors) => {
+
+            let error_message = errors.iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            Err(ErrorInternalServerError(error_message))
+        }
+    }
+}
+
+#[post("/test/grafana")]
+async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
+
+    let mut files: Vec<ImportFileContent> = Vec::new(); //mock DB ---> this should be provided in advance
+    files.push(ImportFileContent { name: "BnB", content: "BnB:
+    type is smartcomm-minmaxbarchart-panel
+    source is first
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
+    traces -> dateObserved, NOx, O3, NO2" });
+    files.push(ImportFileContent { name: "import", content: "#import mock" }); //mock for nested imports to trigger an error
+
+    match substitute_imports(input.source.as_str(), &files) {
+        Ok(preprocessed_source) => {
+            // Parse the preprocessed input
+            let result = parse_input(&preprocessed_source);
+
+            if let Ok(parsed_config) = result {
+                let g: Grafana = Grafana::from(parsed_config);
+                log::info!("Grafana app compiled successfully!");
+                return Ok(Json(g)); // Ensure `Grafana` implements Serialize
+            }
+
+            // If parsing fails, return error
+            let error = WebErrorPosition {
+                status: "error".to_string(),
+                errors: result.err().unwrap(),
+            };
+            Err(error)
+        }
+        Err(errors) => {
+            // Handle preprocessing errors
+            let error = WebErrorPosition {
+                status: "error".to_string(),
+                errors,
+            };
+            Err(error)
+        }
+    }
+}
+
+
 #[get("/status")]
 async fn status() -> impl Responder {
     const STATUSES: [&str; 5] = [
@@ -319,6 +385,8 @@ async fn main() -> std::io::Result<()> {
             .service(index)
             .service(compile)
             .service(test)
+            .service(import_test)
+            .service(testgrafana)
             .wrap(Logger::default())
     })
     .bind(("0.0.0.0", 8080))?
