@@ -16,6 +16,10 @@ use sagc::parser::{parse_input, Position};
 use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
 
+// ------ new imports from include snippets ----------
+//use dotenv::dotenv;
+use std::env::var;
+
 //-----IMPORTS FOR TESTING------
 use std::fs::File;
 use sagc::preprocessing::{substitute_imports, ImportFileContent};
@@ -26,11 +30,25 @@ struct GrafanaUri(Uri);
 #[derive(Debug, Clone)]
 struct DeployUri(Uri);
 
+//--------- Edited from Egor's snippets -----------
+
+#[derive(Debug, Deserialize, Serialize)]
+struct FileMetadata {
+    municipalityName: String,
+    #[serde(rename(serialize = "organizationName"))]
+    orgName: String,
+    projectName: String,
+    path: String,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 struct Input {
     source: String,
     user_id: String,
+    metadata: FileMetadata,
 }
+
+//-------------------------------------------------------
 
 #[derive(Debug, Deserialize, Serialize)]
 struct DeployPayload {
@@ -272,23 +290,41 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
 }
 
 #[post("/test/import")]
-async fn import_test(input: web::Json<Input>) -> Result<String> {
-    let mut files: Vec<ImportFileContent> = Vec::new();
-    files.push(ImportFileContent { name: "a", content: "#import ghj" });
-    files.push(ImportFileContent { name: "b", content: "bbb" });
+async fn import_test() -> Result<String, actix_web::Error> {
+    let client = Client::default();
 
-    match substitute_imports(&input.source, &files) {
-        Ok(res) => Ok(res),
-        Err(errors) => {
+    let data = FileMetadata {
+        municipalityName: "Krems".into(),
+        orgName: "Imc".into(),
+        projectName: "Project 1".into(),
+        path: "folder-1.file-1".into(),
+    };
+    
+    //dotenv::dotenv(); !THIS IMPORT BREAKS IT
 
-            let error_message = errors.iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+    let mut req = client
+        .get("http://localhost:9512/api/document_content")
+        .bearer_auth(var("WEB_TOKEN").unwrap_or_else(|_| String::new()));
 
-            Err(ErrorInternalServerError(error_message))
+    req = req.query(&data).unwrap(); 
+
+    let res = req.send().await;
+
+    if let Ok(mut response) = res {
+        if let Ok(body) = response.body().await {
+            if let Ok(body_string) = String::from_utf8(body.to_vec()) {
+                println!("Body: {}", body_string);
+            } else {
+                println!("Failed to parse response body as UTF-8.");
+            }
+        } else {
+            println!("Failed to read response body.");
         }
+    } else {
+        println!("Request failed.");
     }
+
+    Ok("Done".to_string()) 
 }
 
 #[post("/test/grafana")]
