@@ -24,6 +24,7 @@ rand = { version = "0.8.5", features = ["alloc"] }
 nom_locate = "4.2.0"
 awc = {version = "3.4.0", features = ["openssl"]}
 nom-unicode = "0.3.0"
+dotenv = "0.15.0"
 
 [dev-dependencies]
 criterion = "0.5.1"

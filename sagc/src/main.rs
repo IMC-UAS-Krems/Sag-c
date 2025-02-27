@@ -17,7 +17,7 @@ use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
 
 // ------ new imports from include snippets ----------
-//use dotenv::dotenv;
+use dotenv::dotenv;
 use std::env::var;
 
 //-----IMPORTS FOR TESTING------
@@ -34,6 +34,7 @@ struct DeployUri(Uri);
 
 #[derive(Debug, Deserialize, Serialize)]
 struct FileMetadata {
+    userId: String,
     municipalityName: String,
     #[serde(rename(serialize = "organizationName"))]
     orgName: String,
@@ -291,41 +292,45 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
 
 #[post("/test/import")]
 async fn import_test() -> Result<String, actix_web::Error> {
-    let client = Client::default();
+    let client = Client::default(); // This client is already provided in each endpoint
 
     let data = FileMetadata {
+        userId: "1".into(),
         municipalityName: "Krems".into(),
         orgName: "Imc".into(),
         projectName: "Project 1".into(),
         path: "folder-1.file-1".into(),
     };
+    dotenv::dotenv().ok(); // Load environment variables
+
+    let token = var("WEB_TOKEN").map_err(|e| ErrorInternalServerError(e))?;
+    println!("WEB_TOKEN: {}", token);
+
+    let req_url = "http://localhost:9512/api/document_content";
+    let mut req = client.get(req_url).bearer_auth(&token);
+
+    // Serialize and print query parameters
+    let query_str = serde_json::to_string(&data).unwrap(); // Debugging
+    println!("Serialized Query Params (not URL-encoded): {}", query_str);
+
+    req = req.query(&data).map_err(|e| ErrorInternalServerError(e))?;
+
+    // Print final request URL (with params)
+    println!("Sending request to: {}", req_url);
     
-    //dotenv::dotenv(); !THIS IMPORT BREAKS IT
+    let mut res = req.send().await.map_err(|e| ErrorInternalServerError(e))?;
 
-    let mut req = client
-        .get("http://localhost:9512/api/document_content")
-        .bearer_auth(var("WEB_TOKEN").unwrap_or_else(|_| String::new()));
+    println!("Response Status: {}", res.status());
 
-    req = req.query(&data).unwrap(); 
+    let body_bytes = res.body().await.map_err(|e| ErrorInternalServerError(e))?;
+    let body_string = String::from_utf8(body_bytes.to_vec()).map_err(|e| ErrorInternalServerError(e))?;
 
-    let res = req.send().await;
+    println!("Response Body: {}", body_string);
 
-    if let Ok(mut response) = res {
-        if let Ok(body) = response.body().await {
-            if let Ok(body_string) = String::from_utf8(body.to_vec()) {
-                println!("Body: {}", body_string);
-            } else {
-                println!("Failed to parse response body as UTF-8.");
-            }
-        } else {
-            println!("Failed to read response body.");
-        }
-    } else {
-        println!("Request failed.");
-    }
-
-    Ok("Done".to_string()) 
+    Ok(body_string)
 }
+
+
 
 #[post("/test/grafana")]
 async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
