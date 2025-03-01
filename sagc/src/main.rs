@@ -36,7 +36,7 @@ struct DeployUri(Uri);
 struct FileMetadata {
     userId: String,
     municipalityName: String,
-    #[serde(rename(serialize = "organizationName"))]
+    #[serde(rename(serialize = "organizationName"))]  // orgName -> organizationName
     orgName: String,
     projectName: String,
     path: String,
@@ -141,6 +141,9 @@ async fn deploy(
     }
 }
 
+// ------ Endpoints Collection ------
+
+/// checks json input for errors
 #[post("/check")]
 async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
     let result = parse_input(input.source.as_str());
@@ -158,6 +161,25 @@ async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPositi
     }))
 }
 
+/// checks json input for errors
+#[post("/check2")]
+async fn check2(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
+    let result = parse_input(input.source.as_str());
+
+    if let Err(errors) = result {
+        let error = WebErrorPosition {
+            status: "error".to_string(),
+            errors,
+        };
+        return Err(error);
+    }
+
+    Ok(Json(NoErrors {
+        status: "ok".to_string(),
+    }))
+}
+
+/// 
 #[post("/compile")]
 async fn compile(
     input: web::Json<Input>,
