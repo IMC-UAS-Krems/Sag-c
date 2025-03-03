@@ -161,24 +161,6 @@ async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPositi
     }))
 }
 
-/// checks json input for errors
-#[post("/check2")]
-async fn check2(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
-    let result = parse_input(input.source.as_str());
-
-    if let Err(errors) = result {
-        let error = WebErrorPosition {
-            status: "error".to_string(),
-            errors,
-        };
-        return Err(error);
-    }
-
-    Ok(Json(NoErrors {
-        status: "ok".to_string(),
-    }))
-}
-
 /// 
 #[post("/compile")]
 async fn compile(
@@ -312,6 +294,7 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
     Err(errors)
 }
 
+/// sends an authenticated request with file metadata
 #[post("/test/import")]
 async fn import_test() -> Result<String, actix_web::Error> {
     let client = Client::default(); // This client is already provided in each endpoint
@@ -324,6 +307,8 @@ async fn import_test() -> Result<String, actix_web::Error> {
         path: "folder-1.file-1".into(),
     };
     dotenv::dotenv().ok(); // Load environment variables
+
+    
 
     let token = var("WEB_TOKEN").map_err(|e| ErrorInternalServerError(e))?;
     println!("WEB_TOKEN: {}", token);
@@ -353,7 +338,7 @@ async fn import_test() -> Result<String, actix_web::Error> {
 }
 
 
-
+/// test substitution of imports files
 #[post("/test/grafana")]
 async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
 
