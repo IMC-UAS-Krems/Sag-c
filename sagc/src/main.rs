@@ -4,7 +4,7 @@ use std::time::Duration;
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::web::{self, Json};
-use actix_web::{get, post, App, HttpServer, Responder, Result, error::ErrorInternalServerError};
+use actix_web::{get, post, App, HttpServer,HttpResponse, Responder, Result, error::ErrorInternalServerError};
 use awc::http::Uri;
 use awc::Client;
 use rand::seq::IteratorRandom;
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 // ------ new imports from include snippets ----------
 use dotenv::dotenv;
-use std::env::var;
+use std::env::{self, var};
 
 //-----IMPORTS FOR TESTING------
 use std::fs::File;
@@ -294,6 +294,28 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
     Err(errors)
 }
 
+/// Import variable from .env file
+#[post("/test_env_var")]
+async fn test_env_var() -> Result<HttpResponse, actix_web::Error> {
+    if dotenv::dotenv().is_err() {
+        log::error!("Failed to read .env file");
+        std::process::exit(1);
+    }
+
+    let web_token = env::var("WEB_TOKEN");
+    match web_token {
+        Ok(token) => {
+            log::info!("WEB_TOKEN: {}", token);
+            Ok(HttpResponse::Ok().body(format!("WEB_TOKEN: {}", token)))
+        }
+        Err(e) => {
+            log::error!("Error reading WEB_TOKEN: {}", e);
+            Err(ErrorInternalServerError(e))
+        }
+    }
+}
+
+
 /// sends an authenticated request with file metadata
 #[post("/test/import")]
 async fn import_test() -> Result<String, actix_web::Error> {
@@ -434,6 +456,7 @@ async fn main() -> std::io::Result<()> {
             .service(compile)
             .service(test)
             .service(import_test)
+            .service(test_env_var)
             .service(testgrafana)
             .wrap(Logger::default())
     })
