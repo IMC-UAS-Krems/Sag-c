@@ -169,7 +169,8 @@ fn main(){
     check_import(f, 12);
 }
 */
-/*TODOs
+
+/* TODO:s
 
 1. make substitution function take vector of file contents
 2. check for the content size and properly log it using the structures
