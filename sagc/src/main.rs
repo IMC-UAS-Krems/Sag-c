@@ -22,7 +22,7 @@ use std::env::var;
 
 //-----IMPORTS FOR TESTING------
 use std::fs::File;
-use sagc::preprocessing::{substitute_imports, ImportFileContent};
+use sagc::preprocessing::{substitute_imports, ImportFileContent, ContentRequest, substitute_imports_from_backend};
 use std::io::Error;
 
 #[derive(Debug, Clone)]
@@ -46,15 +46,6 @@ struct Input {
     source: String,
     user_id: String,
     //metadata: FileMetadata,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct ContentRequest {
-    municipalityName: String,
-    #[serde(rename(serialize = "organizationName"))]
-    orgName: String,
-    projectName: String,
-    path: String,
 }
 
 //-------------------------------------------------------

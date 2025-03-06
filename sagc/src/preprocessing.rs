@@ -3,8 +3,15 @@
 use std::fs::{File, read_to_string};
 use std::io::{self, BufRead, BufReader, Error, ErrorKind};
 use std::path::Path;
+use actix_web::{web, Error as ActixError, error::ErrorInternalServerError};
+use awc::Client;
 use crate::parser::{Span, Position};
 use crate::errors::{ImportError, ImportErrorKind, SagError};
+use serde::{Deserialize, Serialize};
+
+// ------ new imports from include snippets ----------
+use dotenv::dotenv;
+use std::env::var;
 
 /* -----------Section 1: Defining Structs and Enums----------- */
 
@@ -34,6 +41,15 @@ pub struct ImportFile<'a> {
 pub struct ImportFileContent<'a> {
     pub name: &'a str,
     pub content: &'a str,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ContentRequest {
+    pub municipalityName: String,
+    #[serde(rename(serialize = "organizationName"))]
+    pub orgName: String,
+    pub projectName: String,
+    pub path: String,
 }
 
 /* -----------Section 2: Defining Functions----------- */
