@@ -169,25 +169,6 @@ async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPositi
     }))
 }
 
-/// checks json input for errors
-#[post("/check2")]
-async fn check2(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
-    let result = parse_input(input.source.as_str());
-
-    if let Err(errors) = result {
-        let error = WebErrorPosition {
-            status: "error".to_string(),
-            errors,
-        };
-        return Err(error);
-    }
-
-    Ok(Json(NoErrors {
-        status: "ok".to_string(),
-    }))
-}
-
-/// 
 #[post("/compile")]
 async fn compile(
     input: web::Json<Input>,
@@ -254,6 +235,7 @@ async fn compile(
     }
 }
 
+/// compiles a grafana dashboard
 #[post("/grafana")]
 async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
     let result = parse_input(input.source.as_str());
@@ -272,6 +254,7 @@ async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosi
     Err(error)
 }
 
+/// compiles a dash dashboard
 #[post("/dash")]
 async fn dash(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
     let result = parse_input(input.source.as_str());
@@ -289,6 +272,7 @@ async fn dash(input: web::Json<Input>) -> Result<impl Responder, WebErrorPositio
     Err(error)
 }
 
+/// test error handling
 #[post("/test")]
 async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
     let input = input.source.as_str();
@@ -358,7 +342,18 @@ async fn import_test(input: web::Json<Input>, client: web::Data<Client>) -> Resu
     Ok(body_string)
 }
 
-
+/// import content from backend and subtitute it in the target content
+#[post("/test/import_from_backend")]
+async fn import_from_backend(client: web::Data<Client>, input: web::Json<Input>) -> Result<String, actix_web::Error> {
+    match substitute_imports_from_backend(input.source.as_str()).await {
+        Ok(result) => Ok(result),
+        Err(errors) => {
+            let error_messages: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();  // TODO: Implement Display for Error
+            let error_message = error_messages.join(", ");
+            Err(ErrorInternalServerError(error_message))
+        },
+    }
+}
 
 #[post("/test/grafana")]
 async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
@@ -456,6 +451,7 @@ async fn main() -> std::io::Result<()> {
             .service(test)
             .service(import_test)
             .service(testgrafana)
+            .service(import_from_backend)
             .wrap(Logger::default())
     })
     .bind(("0.0.0.0", 8080))?

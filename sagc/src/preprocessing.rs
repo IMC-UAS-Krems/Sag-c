@@ -71,6 +71,84 @@ pub fn check_import(content: &str, filename: String, pos_in_file: usize, pos: Po
 
 } 
 
+/// sends a request to the backend and returns the conents of the file #import <PATH_TO_FILE>
+pub async fn get_content_from_backend(client: web::Data<Client>) -> Result<String, ActixError> {
+    
+    // TODO: this default for now; change to more specified request 
+    let data = ContentRequest {
+        municipalityName: "Krems".into(),
+        orgName: "Imc".into(),
+        projectName: "Project 1".into(),
+        path: "folder-1.file-1".into(),
+    };
+
+    dotenv::dotenv().ok(); // Load environment variables
+    let token = var("WEB_TOKEN").map_err(|e| ErrorInternalServerError(e))?;
+
+    let req_url = "http://localhost:9512/api/document_content";
+    let mut req = client.get(req_url).bearer_auth(&token);
+    
+    req = req.query(&data).map_err(|e| ErrorInternalServerError(e))?;
+
+    let mut res = req.send().await.map_err(|e| ErrorInternalServerError(e))?;
+    
+    let body_bytes = res.body().await.map_err(|e| ErrorInternalServerError(e))?;
+    let body_string = String::from_utf8(body_bytes.to_vec()).map_err(|e| ErrorInternalServerError(e))?;
+    
+
+    Ok(body_string)
+}
+
+/// substitutes import statements in the target content with the actual content from the backend.
+pub async fn substitute_imports_from_backend(target: &str) -> Result<String, Vec<Error>> {
+    /* 
+    If #import is found in the target content:
+        1. Send a request to the backend to get the contents of the file #import <PATH_TO_FILE>
+        2. If we successfully get the content:
+            Substitue it
+        3. If the fetch fails:
+            Push an error into the error list
+    */
+
+    let mut result = String::new();
+    let mut errors = Vec::new(); 
+    let mut nlines: usize = 0;
+
+    for line in target.lines() {
+        nlines += 1;
+        if line.starts_with("#import") {
+            let client = web::Data::new(Client::default());
+            let import_pos = Position { 
+                row_start: nlines, 
+                row_end: nlines, 
+                col_start: 0, 
+                col_end: line.len() 
+            };
+
+            let import_name = line[7..].trim();
+
+            let import_content = get_content_from_backend(client).await;
+            
+            match import_content {
+                Ok(content) => {
+                    match check_import(&content, import_name.to_string(), nlines, import_pos) {
+                        Ok(response) => result.push_str(&format!("{}\n", content)),  // if no errors, append the content to the result
+                        Err(mut e) => (), // TODO: push the right error
+                    }
+                }
+                Err(e) => (),  // TODO:  push the right error
+            }
+        } else {
+            result.push_str(&format!("{}\n", line));
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(result)
+    } else {
+        Err(errors)  // TODO: return the right error
+    }
+}
 /// substitutes import statements in the target content with the actual content of the imported files.
 pub fn substitute_imports(target: &str, imports: &[ImportFileContent]) -> Result<String, Vec<SagError>> {
     let mut result = String::new();
@@ -88,7 +166,7 @@ pub fn substitute_imports(target: &str, imports: &[ImportFileContent]) -> Result
                 col_end: line.len() 
             };
 
-            let import_name = line[7..].trim(); // TODO use 'check_import'
+            let import_name = line[7..].trim(); 
 
             let import_content = search_files(import_name.clone(), import_pos, imports);
             
