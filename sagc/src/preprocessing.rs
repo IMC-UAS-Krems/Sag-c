@@ -65,7 +65,7 @@ pub fn search_files(name: &str, pos: Position, files: &[ImportFileContent]) -> R
     Err(SagError::import_error(ImportErrorKind::MissingImport(name.to_string()),pos))
 }
 
-/// checks the content of an imported file for nested imports and logs the details, returns ImportLog if successful
+/// checks the imported file for nested imports, returns ImportLog if successful
 pub fn check_import(content: &str, filename: String, pos_in_file: usize, pos: Position) -> Result<ImportLog, Vec<SagError>>  {
     let mut nlines: usize = 0;
     let mut errors = Vec::new();
@@ -87,19 +87,48 @@ pub fn check_import(content: &str, filename: String, pos_in_file: usize, pos: Po
 
 } 
 
-/// sends a request to the backend and returns the conents of the file #import <PATH_TO_FILE>
-pub async fn get_content_from_backend(client: web::Data<Client>) -> Result<String, ActixError> {
-    
-    // TODO: this default for now; change to more specified request 
-    let data = ContentRequest {
+pub fn get_current_file_path() {
+
+    // TODO: send a request to the backend and return the file system of the current file
+
+    /*  TODO: search for the imported file in the file system and return the content
+
+        TODO: add SagError if the file is not found
+        
+        Err(SagError::import_error(ImportErrorKind::MissingImport(name.to_string()),pos))
+    */
+
+}
+
+pub fn get_imported_file_path(imported_path: &str) -> ContentRequest {
+
+    // TODO: change struct type
+    let current_file_path = ContentRequest{
         municipalityName: "Krems".into(),
         orgName: "Imc".into(),
         projectName: "Project 1".into(),
-        path: "folder-1.file-1".into(),
+        path: "file-2".into(),
     };
+
+    let imported_file_path = ContentRequest {
+        municipalityName: current_file_path.municipalityName,
+        orgName: current_file_path.orgName,
+        projectName: current_file_path.projectName,
+        path: imported_path.into(),
+    };
+
+    return imported_file_path
+
+}
+
+/// sends a request to the backend and returns the conents of the file #import <PATH_TO_FILE>
+pub async fn get_content_from_backend(import_name: &str) -> Result<String, ActixError> {
+    
+    let data = get_imported_file_path(import_name);
 
     dotenv::dotenv().ok(); // Load environment variables
     let token = var("WEB_TOKEN").map_err(|e| ErrorInternalServerError(e))?;
+    let client = web::Data::new(Client::default());
 
     let req_url = "http://localhost:9512/api/document_content";
     let mut req = client.get(req_url).bearer_auth(&token);
@@ -109,14 +138,18 @@ pub async fn get_content_from_backend(client: web::Data<Client>) -> Result<Strin
     let mut res = req.send().await.map_err(|e| ErrorInternalServerError(e))?;
     
     let body_bytes = res.body().await.map_err(|e| ErrorInternalServerError(e))?;
+
+    /*  TODO: add SagError if the file is not found 
+        Err(SagError::import_error(ImportErrorKind::MissingImport(name.to_string()),pos))
+    */
+
     let body_string = String::from_utf8(body_bytes.to_vec()).map_err(|e| ErrorInternalServerError(e))?;
     
-
     Ok(body_string)
 }
 
 /// substitutes import statements in the target content with the actual content from the backend.
-pub async fn substitute_imports_from_backend(target: &str) -> Result<String, Vec<Error>> {
+pub async fn substitute_imports_from_backend(target: &str) -> Result<String, Vec<SagError>> {
     /* 
     If #import is found in the target content:
         1. Send a request to the backend to get the contents of the file #import <PATH_TO_FILE>
@@ -133,7 +166,6 @@ pub async fn substitute_imports_from_backend(target: &str) -> Result<String, Vec
     for line in target.lines() {
         nlines += 1;
         if line.starts_with("#import") {
-            let client = web::Data::new(Client::default());
             let import_pos = Position { 
                 row_start: nlines, 
                 row_end: nlines, 
@@ -143,16 +175,16 @@ pub async fn substitute_imports_from_backend(target: &str) -> Result<String, Vec
 
             let import_name = line[7..].trim();
 
-            let import_content = get_content_from_backend(client).await;
+            let import_content = get_content_from_backend(import_name).await;
             
             match import_content {
                 Ok(content) => {
                     match check_import(&content, import_name.to_string(), nlines, import_pos) {
                         Ok(response) => result.push_str(&format!("{}\n", content)),  // if no errors, append the content to the result
-                        Err(mut e) => (), // TODO: push the right error
+                        Err(mut e) => (errors.append(&mut e)),
                     }
                 }
-                Err(e) => (),  // TODO:  push the right error
+                Err(e) => () //  TODO: (errors.push(e)), after adding SagError in get_content_from_backend()
             }
         } else {
             result.push_str(&format!("{}\n", line));
@@ -162,7 +194,7 @@ pub async fn substitute_imports_from_backend(target: &str) -> Result<String, Vec
     if errors.is_empty() {
         Ok(result)
     } else {
-        Err(errors)  // TODO: return the right error
+        Err(errors)
     }
 }
 /// substitutes import statements in the target content with the actual content of the imported files.

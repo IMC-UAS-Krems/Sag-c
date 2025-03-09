@@ -298,6 +298,7 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
     Err(errors)
 }
 
+/// test connectivity to the backend
 #[post("/test/import")]
 async fn import_test(input: web::Json<Input>, client: web::Data<Client>) -> Result<String, actix_web::Error> {
     let data = ContentRequest {
