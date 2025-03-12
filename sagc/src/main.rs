@@ -69,6 +69,25 @@ struct UrlResponse {
     status: String,
 }
 
+
+#[derive(Debug, Deserialize, Serialize)]
+struct FileInfo {
+    // Define the fields of FileInfo based on your requirements
+    name: String,
+    docType: String,
+    projectName: String,
+    orgName: String,
+    municipalityName: String,
+    path: String,
+    fullPath: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct FileInfoRequest {
+    user_id: String,
+    file_info: FileInfo,
+}
+
 async fn fetch_grafana_model(
     client: &Client,
     uri: &Uri,
@@ -298,6 +317,53 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
     Err(errors)
 }
 
+// #[post("/file-info")]
+// async fn get_file_info(input: web::Json<Input>, client: web::Data<Client>) -> Result<impl Responder, actix_web::Error> {
+//     let user_id = input.user_id.clone();
+//     let file_info = input.into_inner();
+
+//     let mut response = client
+//         .post("http://localhost:8080/api/file-info")
+//         .send_json(&file_info)
+//         .await
+//         .map_err(|e| ErrorInternalServerError(e))?;
+    
+//     println!("Response Status: {}", response.status());
+
+//     if response.status().is_success() {
+//         let data = response.json::<serde_json::Value>().await.map_err(|e| ErrorInternalServerError(e))?;
+//         Ok(Json(data))
+//     } else {
+//         let error_message = response.body().await.map_err(|e| ErrorInternalServerError(e))?;
+//         Err(ErrorInternalServerError(String::from_utf8(error_message.to_vec()).unwrap()))
+//     } 
+// }
+
+#[post("/file-info")]
+async fn get_file_info(input: web::Json<Input>, client: web::Data<Client>) -> Result<impl Responder, actix_web::Error> {
+
+    // dotenv::dotenv().ok(); // Load environment variables
+
+    // let token = var("WEB_TOKEN").map_err(|e| ErrorInternalServerError(e))?;
+    // println!("WEB_TOKEN: {}", token);
+
+    let mut response = client
+        .get("http://localhost:8080/api/file-info")
+        .send()
+        .await
+        .map_err(|e| ErrorInternalServerError(e))?;
+    
+    println!("Response Status: {}", response.status());
+
+    if response.status().is_success() {
+        let data = response.json::<serde_json::Value>().await.map_err(|e| ErrorInternalServerError(e))?;
+        Ok(Json(data))
+    } else {
+        let error_message = response.body().await.map_err(|e| ErrorInternalServerError(e))?;
+        Err(ErrorInternalServerError(String::from_utf8(error_message.to_vec()).unwrap()))
+    }
+}
+
 /// test connectivity to the backend
 #[post("/test/import")]
 async fn import_test(input: web::Json<Input>, client: web::Data<Client>) -> Result<String, actix_web::Error> {
@@ -444,6 +510,7 @@ async fn main() -> std::io::Result<()> {
             .service(import_test)
             .service(testgrafana)
             .service(import_from_backend)
+            .service(get_file_info)
             .wrap(Logger::default())
     })
     .bind(("0.0.0.0", 8080))?
