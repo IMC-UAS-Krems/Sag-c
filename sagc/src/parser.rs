@@ -1,5 +1,6 @@
 // Custom error type for parsing
 use crate::{errors::SagError, sections::Config};
+use crate::importing::{substitute_import_content, FileMetadata};
 
 // 'nom' crate for parsing and error handling
 use nom::bytes::complete::{tag, take_while}; // tag: matches a specific string, take_while: matches a string until a condition is met
@@ -729,8 +730,15 @@ fn check_used_fields(blocks: &Blocks<'_>) {
 }
 
 /// parsing input and returning Config object
-pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
-    let mut blocks = match parse_lines(input) {
+pub async fn parse_input(input: &str, metadata: FileMetadata) -> Result<Config<'_>, Vec<SagError>> {
+    let content = match substitute_import_content(input, metadata).await {
+        Ok(content) => content,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+
+    let mut blocks = match parse_lines(&content) {
         Ok(blocks) => blocks,
         Err(e) => {
             return Err(e);
@@ -738,7 +746,7 @@ pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
     };
 
     let config = match Config::new(&mut blocks) {
-        Ok(config) => config,
+        Ok(config) => config, // Convert to a 'static lifetime if necessary
         Err(e) => {
             return Err(e
                 .into_iter()

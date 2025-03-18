@@ -1,16 +1,14 @@
 /* This file defines functions and structures for handling file imports and substitutions in a configuration system */
 
 use std::fs::{File, read_to_string};
-use std::io::{self, BufRead, BufReader, Error, ErrorKind};
-use std::path::Path;
+use std::io::{BufRead};
 use actix_web::{web, Error as ActixError, error::ErrorInternalServerError};
 use awc::Client;
-use crate::parser::{Span, Position};
-use crate::errors::{ImportError, ImportErrorKind, SagError};
+use crate::parser::{Position};
+use crate::errors::{ImportErrorKind, SagError};
 use serde::{Deserialize, Serialize};
 
 // ------ new imports from include snippets ----------
-use dotenv::dotenv;
 use std::env::var;
 
 /* -----------Section 1: Defining Structs and Enums----------- */
@@ -181,7 +179,7 @@ pub async fn substitute_imports_from_backend(target: &str) -> Result<String, Vec
                 Ok(content) => {
                     match check_import(&content, import_name.to_string(), nlines, import_pos) {
                         Ok(response) => result.push_str(&format!("{}\n", content)),  // if no errors, append the content to the result
-                        Err(mut e) => (errors.append(&mut e)),
+                        Err(mut e) => errors.append(&mut e),
                     }
                 }
                 Err(e) => () //  TODO: (errors.push(e)), after adding SagError in get_content_from_backend()

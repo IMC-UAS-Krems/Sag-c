@@ -27,6 +27,7 @@ pub enum ImportErrorKind {
     MissingImport(String),
     NestedImport(String),
     CompilationProblem(String),
+    InternalError(String),
 }
 
 // new
@@ -105,6 +106,7 @@ impl Display for ImportErrorKind {
             ImportErrorKind::MissingImport(file) => write!(f, "Could not access file '{}'", file),
             ImportErrorKind::NestedImport(file) => write!(f, "Imported file '{}' contains nested imports.",file),
             ImportErrorKind::CompilationProblem(file) => write!(f, "File '{}' failed in compilation.",file),
+            ImportErrorKind::InternalError(file) => write!(f, "Internal error in file '{}'",file),
         }
     }
 }

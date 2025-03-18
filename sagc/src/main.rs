@@ -13,6 +13,7 @@ use sagc::dash::Dash;
 use sagc::errors::{CompileError, GeneralError, SagError, WebErrorPosition};
 use sagc::grafana::Grafana;
 use sagc::parser::{parse_input, Position};
+use sagc::importing::{substitute_import_content, FileMetadata};
 use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
 
@@ -32,20 +33,18 @@ struct DeployUri(Uri);
 
 //--------- Edited from Egor's snippets -----------
 
-#[derive(Debug, Deserialize, Serialize)]
-struct FileMetadata {
-    municipalityName: String,
-    #[serde(rename(serialize = "organizationName"))]  // orgName -> organizationName
-    orgName: String,
-    projectName: String,
-    path: String,
-}
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Input {
     source: String,
     user_id: String,
-    //metadata: FileMetadata,
+    metadata: FileMetadata,
+}
+
+#[derive(Debug, Serialize)]
+struct CheckResponse {
+    status: String,
+    // metadata: FileMetadata,
 }
 
 //-------------------------------------------------------
@@ -67,25 +66,6 @@ struct NoErrors {
 struct UrlResponse {
     url: String,
     status: String,
-}
-
-
-#[derive(Debug, Deserialize, Serialize)]
-struct FileInfo {
-    // Define the fields of FileInfo based on your requirements
-    name: String,
-    docType: String,
-    projectName: String,
-    orgName: String,
-    municipalityName: String,
-    path: String,
-    fullPath: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct FileInfoRequest {
-    user_id: String,
-    file_info: FileInfo,
 }
 
 async fn fetch_grafana_model(
@@ -163,18 +143,20 @@ async fn deploy(
 
 /// checks json input for errors
 #[post("/check")]
-async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
-    let result = parse_input(input.source.as_str());
+async fn check(input: web::Json<Input>) -> Result<impl Responder, actix_web::Error> {
 
-    if let Err(errors) = result {
+    let metadata = FileMetadata::from(input.metadata.clone());
+    let result = parse_input(input.source.as_str(), metadata);
+
+    if let Err(errors) = result.await{
         let error = WebErrorPosition {
             status: "error".to_string(),
             errors,
         };
-        return Err(error);
-    }
+        return Err(error.into());
+    };
 
-    Ok(Json(NoErrors {
+    Ok(Json(CheckResponse {
         status: "ok".to_string(),
     }))
 }
@@ -189,9 +171,20 @@ async fn compile(
 
     dbg!(&input);
 
-    let result = parse_input(input.source.as_str());
+    let metadata = FileMetadata::from(input.metadata.clone());
+    // let mut content = match (substitute_import_content(input.source.as_str(), metadata).await) {
+    //     Ok(result) => result,
+    //     Err(errors) => {
+    //         let error_messages: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();  // TODO: Implement Display for Error
+    //         let error_message = error_messages.join(", ");
+    //         return Err(CompileError::General(GeneralError::new(error_message)));
+    //     },
+    // };
 
-    if let Ok(config) = result {
+    let result = parse_input(input.source.as_str(), metadata);
+    let result_awaited = result.await; // Await the result once and store it
+
+    if let Ok(config) = result_awaited{
         // dbg!(&grafana);
         dbg!(&config);
         let dashboard_type = match config.application.dashboard {
@@ -238,7 +231,7 @@ async fn compile(
     } else {
         let error = WebErrorPosition {
             status: "error".to_string(),
-            errors: result.err().unwrap(),
+            errors: result_awaited.err().unwrap(),
         };
 
         Err(CompileError::WebPos(error))
@@ -248,9 +241,12 @@ async fn compile(
 /// compiles a grafana dashboard
 #[post("/grafana")]
 async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
-    let result = parse_input(input.source.as_str());
+    let metadata = FileMetadata::from(input.metadata.clone());
 
-    if let Ok(grafana) = result {
+    let result = parse_input(input.source.as_str(), metadata);
+    let result_awaited = result.await; // Await the result once and store it
+
+    if let Ok(grafana) = result_awaited {
         // dbg!(&grafana);
         let grafana: Grafana = Grafana::from(grafana);
         log::info!("Grafana app compiled successfully!");
@@ -258,7 +254,7 @@ async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosi
     }
     let error = WebErrorPosition {
         status: "error".to_string(),
-        errors: result.err().unwrap(),
+        errors: result_awaited.err().unwrap(),
     };
 
     Err(error)
@@ -267,16 +263,19 @@ async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosi
 /// compiles a dash dashboard
 #[post("/dash")]
 async fn dash(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
-    let result = parse_input(input.source.as_str());
+    let metadata = FileMetadata::from(input.metadata.clone());
 
-    if let Ok(dash) = result {
+    let result = parse_input(input.source.as_str(), metadata);
+    let result_awaited = result.await; // Await the result once and store it
+
+    if let Ok(dash) = result_awaited {
         let dash: Dash = Dash::from(dash);
         log::info!("Dash app compiled successfully!");
         return Ok(Json(dash));
     }
     let error = WebErrorPosition {
         status: "error".to_string(),
-        errors: result.err().unwrap(),
+        errors: result_awaited.err().unwrap(),
     };
 
     Err(error)
@@ -317,57 +316,10 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
     Err(errors)
 }
 
-// #[post("/file-info")]
-// async fn get_file_info(input: web::Json<Input>, client: web::Data<Client>) -> Result<impl Responder, actix_web::Error> {
-//     let user_id = input.user_id.clone();
-//     let file_info = input.into_inner();
-
-//     let mut response = client
-//         .post("http://localhost:8080/api/file-info")
-//         .send_json(&file_info)
-//         .await
-//         .map_err(|e| ErrorInternalServerError(e))?;
-    
-//     println!("Response Status: {}", response.status());
-
-//     if response.status().is_success() {
-//         let data = response.json::<serde_json::Value>().await.map_err(|e| ErrorInternalServerError(e))?;
-//         Ok(Json(data))
-//     } else {
-//         let error_message = response.body().await.map_err(|e| ErrorInternalServerError(e))?;
-//         Err(ErrorInternalServerError(String::from_utf8(error_message.to_vec()).unwrap()))
-//     } 
-// }
-
-#[post("/file-info")]
-async fn get_file_info(input: web::Json<Input>, client: web::Data<Client>) -> Result<impl Responder, actix_web::Error> {
-
-    // dotenv::dotenv().ok(); // Load environment variables
-
-    // let token = var("WEB_TOKEN").map_err(|e| ErrorInternalServerError(e))?;
-    // println!("WEB_TOKEN: {}", token);
-
-    let mut response = client
-        .get("http://localhost:8080/api/file-info")
-        .send()
-        .await
-        .map_err(|e| ErrorInternalServerError(e))?;
-    
-    println!("Response Status: {}", response.status());
-
-    if response.status().is_success() {
-        let data = response.json::<serde_json::Value>().await.map_err(|e| ErrorInternalServerError(e))?;
-        Ok(Json(data))
-    } else {
-        let error_message = response.body().await.map_err(|e| ErrorInternalServerError(e))?;
-        Err(ErrorInternalServerError(String::from_utf8(error_message.to_vec()).unwrap()))
-    }
-}
-
 /// test connectivity to the backend
 #[post("/test/import")]
 async fn import_test(input: web::Json<Input>, client: web::Data<Client>) -> Result<String, actix_web::Error> {
-    let data = ContentRequest {
+    let data = FileMetadata {
         municipalityName: "Krems".into(),
         orgName: "Imc".into(),
         projectName: "Project 1".into(),
@@ -416,6 +368,8 @@ async fn import_from_backend(client: web::Data<Client>, input: web::Json<Input>)
 #[post("/test/grafana")]
 async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
 
+    let metadata = FileMetadata::from(input.metadata.clone());
+
     let mut files: Vec<ImportFileContent> = Vec::new(); //mock DB ---> this should be provided in advance
     files.push(ImportFileContent { name: "BnB", content: "BnB:
     type is smartcomm-minmaxbarchart-panel
@@ -427,9 +381,10 @@ async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebError
     match substitute_imports(input.source.as_str(), &files) {
         Ok(preprocessed_source) => {
             // Parse the preprocessed input
-            let result = parse_input(&preprocessed_source);
+            let result = parse_input(&preprocessed_source, metadata);
+            let result_awaited = result.await; // Await the result once and store it
 
-            if let Ok(parsed_config) = result {
+            if let Ok(parsed_config) = result_awaited {
                 let g: Grafana = Grafana::from(parsed_config);
                 log::info!("Grafana app compiled successfully!");
                 return Ok(Json(g)); // Ensure `Grafana` implements Serialize
@@ -438,7 +393,7 @@ async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebError
             // If parsing fails, return error
             let error = WebErrorPosition {
                 status: "error".to_string(),
-                errors: result.err().unwrap(),
+                errors: result_awaited.err().unwrap(),
             };
             Err(error)
         }
@@ -510,7 +465,6 @@ async fn main() -> std::io::Result<()> {
             .service(import_test)
             .service(testgrafana)
             .service(import_from_backend)
-            .service(get_file_info)
             .wrap(Logger::default())
     })
     .bind(("0.0.0.0", 8080))?
