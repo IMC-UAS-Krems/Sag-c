@@ -695,6 +695,7 @@ pub fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
 
 /// parses the input and returns heirarchial blocks, if errors, it returns a vector of `SagError` objects.
 fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
+
     let input = Span::new(input);  // converts into a Span, which includes position information.
     let result = lexer(input);
 
@@ -730,15 +731,9 @@ fn check_used_fields(blocks: &Blocks<'_>) {
 }
 
 /// parsing input and returning Config object
-pub async fn parse_input(input: &str, metadata: FileMetadata) -> Result<Config<'_>, Vec<SagError>> {
-    let content = match substitute_import_content(input, metadata).await {
-        Ok(content) => content,
-        Err(e) => {
-            return Err(e);
-        }
-    };
+pub fn parse_input(input: &str) -> Result<Config<'_>, Vec<SagError>> {
 
-    let mut blocks = match parse_lines(&content) {
+    let mut blocks = match parse_lines(input) {
         Ok(blocks) => blocks,
         Err(e) => {
             return Err(e);

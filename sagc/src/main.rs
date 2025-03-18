@@ -16,6 +16,7 @@ use sagc::parser::{parse_input, Position};
 use sagc::importing::{substitute_import_content, FileMetadata};
 use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
+use sagc::sections::Config;
 
 // ------ new imports from include snippets ----------
 use dotenv::dotenv;
@@ -44,8 +45,11 @@ struct Input {
 #[derive(Debug, Serialize)]
 struct CheckResponse {
     status: String,
-    // metadata: FileMetadata,
+    metadata: FileMetadata,
+    content: String,
 }
+
+
 
 //-------------------------------------------------------
 
@@ -146,9 +150,18 @@ async fn deploy(
 async fn check(input: web::Json<Input>) -> Result<impl Responder, actix_web::Error> {
 
     let metadata = FileMetadata::from(input.metadata.clone());
-    let result = parse_input(input.source.as_str(), metadata);
+    let content = match substitute_import_content(input.source.as_str(), metadata).await {
+        Ok(result) => result,
+        Err(errors) => {
+            let error_messages: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();  // TODO: Implement Display for Error
+            let error_message = error_messages.join(", ");
+            return Err(ErrorInternalServerError(error_message));
+        },
+    };
 
-    if let Err(errors) = result.await{
+    let result = parse_input(&content);
+
+    if let Err(errors) = result{
         let error = WebErrorPosition {
             status: "error".to_string(),
             errors,
@@ -156,8 +169,10 @@ async fn check(input: web::Json<Input>) -> Result<impl Responder, actix_web::Err
         return Err(error.into());
     };
 
-    Ok(Json(CheckResponse {
+    Ok(Json(CheckResponse{
         status: "ok".to_string(),
+        content: content,
+        metadata: input.metadata.clone(),
     }))
 }
 
@@ -172,19 +187,11 @@ async fn compile(
     dbg!(&input);
 
     let metadata = FileMetadata::from(input.metadata.clone());
-    // let mut content = match (substitute_import_content(input.source.as_str(), metadata).await) {
-    //     Ok(result) => result,
-    //     Err(errors) => {
-    //         let error_messages: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();  // TODO: Implement Display for Error
-    //         let error_message = error_messages.join(", ");
-    //         return Err(CompileError::General(GeneralError::new(error_message)));
-    //     },
-    // };
+    let content = substitute_import_content(input.source.as_str(), metadata).await.map_err(|arg0: std::vec::Vec<SagError>| CompileError::General(GeneralError::new("Error message".to_string())))?;
 
-    let result = parse_input(input.source.as_str(), metadata);
-    let result_awaited = result.await; // Await the result once and store it
+    let result = parse_input(&content);
 
-    if let Ok(config) = result_awaited{
+    if let Ok(config) = result {
         // dbg!(&grafana);
         dbg!(&config);
         let dashboard_type = match config.application.dashboard {
@@ -231,7 +238,7 @@ async fn compile(
     } else {
         let error = WebErrorPosition {
             status: "error".to_string(),
-            errors: result_awaited.err().unwrap(),
+            errors: result.err().unwrap(),
         };
 
         Err(CompileError::WebPos(error))
@@ -243,10 +250,9 @@ async fn compile(
 async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
     let metadata = FileMetadata::from(input.metadata.clone());
 
-    let result = parse_input(input.source.as_str(), metadata);
-    let result_awaited = result.await; // Await the result once and store it
+    let result = parse_input(input.source.as_str());
 
-    if let Ok(grafana) = result_awaited {
+    if let Ok(grafana) = result {
         // dbg!(&grafana);
         let grafana: Grafana = Grafana::from(grafana);
         log::info!("Grafana app compiled successfully!");
@@ -254,7 +260,7 @@ async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosi
     }
     let error = WebErrorPosition {
         status: "error".to_string(),
-        errors: result_awaited.err().unwrap(),
+        errors: result.err().unwrap(),
     };
 
     Err(error)
@@ -265,17 +271,16 @@ async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosi
 async fn dash(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
     let metadata = FileMetadata::from(input.metadata.clone());
 
-    let result = parse_input(input.source.as_str(), metadata);
-    let result_awaited = result.await; // Await the result once and store it
+    let result = parse_input(input.source.as_str());
 
-    if let Ok(dash) = result_awaited {
+    if let Ok(dash) = result {
         let dash: Dash = Dash::from(dash);
         log::info!("Dash app compiled successfully!");
         return Ok(Json(dash));
     }
     let error = WebErrorPosition {
         status: "error".to_string(),
-        errors: result_awaited.err().unwrap(),
+        errors: result.err().unwrap(),
     };
 
     Err(error)
@@ -381,10 +386,9 @@ async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebError
     match substitute_imports(input.source.as_str(), &files) {
         Ok(preprocessed_source) => {
             // Parse the preprocessed input
-            let result = parse_input(&preprocessed_source, metadata);
-            let result_awaited = result.await; // Await the result once and store it
+            let result = parse_input(&preprocessed_source);
 
-            if let Ok(parsed_config) = result_awaited {
+            if let Ok(parsed_config) = result {
                 let g: Grafana = Grafana::from(parsed_config);
                 log::info!("Grafana app compiled successfully!");
                 return Ok(Json(g)); // Ensure `Grafana` implements Serialize
@@ -393,7 +397,7 @@ async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebError
             // If parsing fails, return error
             let error = WebErrorPosition {
                 status: "error".to_string(),
-                errors: result_awaited.err().unwrap(),
+                errors: result.err().unwrap(),
             };
             Err(error)
         }
