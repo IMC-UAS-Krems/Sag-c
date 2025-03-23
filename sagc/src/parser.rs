@@ -1,6 +1,6 @@
 // Custom error type for parsing
 use crate::{errors::SagError, sections::Config};
-use crate::importing::{substitute_import_content, FileMetadata};
+use crate::importing::{parse_import_statement, FileMetadata};
 
 // 'nom' crate for parsing and error handling
 use nom::bytes::complete::{tag, take_while}; // tag: matches a specific string, take_while: matches a string until a condition is met
@@ -694,7 +694,7 @@ pub fn tokens_to_blocks(tokens: Vec<Token>) -> Blocks {
 }
 
 /// parses the input and returns heirarchial blocks, if errors, it returns a vector of `SagError` objects.
-fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
+pub fn parse_lines(input: &str) -> Result<Blocks, Vec<SagError>> {
 
     let input = Span::new(input);  // converts into a Span, which includes position information.
     let result = lexer(input);

@@ -13,7 +13,7 @@ use sagc::dash::Dash;
 use sagc::errors::{CompileError, GeneralError, SagError, WebErrorPosition};
 use sagc::grafana::Grafana;
 use sagc::parser::{parse_input, Position};
-use sagc::importing::{substitute_import_content, FileMetadata};
+use sagc::importing::{parse_import_statement, substitute_some_import_content, get_all_imported_content, check_import_errors, FileMetadata, get_imported_file_metadata};
 use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
 use sagc::sections::Config;
@@ -149,18 +149,23 @@ async fn deploy(
 #[post("/check")]
 async fn check(input: web::Json<Input>) -> Result<impl Responder, actix_web::Error> {
 
-    let metadata = FileMetadata::from(input.metadata.clone());
-    let content = match substitute_import_content(input.source.as_str(), metadata).await {
+    let metadata = FileMetadata::from(input.metadata.clone()); // get metadata from input
+
+    // if #import is present, substitute the content
+    let content = match parse_import_statement(input.source.as_str(), metadata).await {
         Ok(result) => result,
         Err(errors) => {
-            let error_messages: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();  // TODO: Implement Display for Error
-            let error_message = error_messages.join(", ");
-            return Err(ErrorInternalServerError(error_message));
+            let error = WebErrorPosition {
+                status: "error".to_string(),
+                errors,
+            };
+            return Err(error.into());
         },
     };
 
-    let result = parse_input(&content);
+    let result = parse_input(&content); // parse the content
 
+    // if there are errors, return them
     if let Err(errors) = result{
         let error = WebErrorPosition {
             status: "error".to_string(),
@@ -187,7 +192,7 @@ async fn compile(
     dbg!(&input);
 
     let metadata = FileMetadata::from(input.metadata.clone());
-    let content = substitute_import_content(input.source.as_str(), metadata).await.map_err(|arg0: std::vec::Vec<SagError>| CompileError::General(GeneralError::new("Error message".to_string())))?;
+    let content = parse_import_statement(input.source.as_str(), metadata).await.map_err(|arg0: std::vec::Vec<SagError>| CompileError::General(GeneralError::new("Error message".to_string())))?;
 
     let result = parse_input(&content);
 
@@ -370,6 +375,85 @@ async fn import_from_backend(client: web::Data<Client>, input: web::Json<Input>)
     }
 }
 
+#[post("/test/import_some_content")]
+async fn import_some_content(client: web::Data<Client>, input: web::Json<Input>) -> Result<String, actix_web::Error> {
+
+    let metadata = FileMetadata::from(input.metadata.clone());
+    let mut result = String::new();
+    let mut nlines: usize = 0;
+    let mut lines = input.source.lines();
+
+     // iterate through the lines of the target content
+     while let Some(line) = lines.next() {
+        nlines += 1;
+
+        // if import statement is found
+        if line.starts_with("import") {
+
+            // get the position of the import statement
+            let import_pos = Position { 
+                row_start: nlines, 
+                row_end: nlines, 
+                col_start: 0, 
+                col_end: line.len() 
+            };
+
+            // remove import from the import statement
+            let import_statement = line[6..].trim(); // remove "import" and trim whitesapce
+            let (import_filename, block_names): (&str, Option<Vec<&str>>) = if import_statement.contains(':') {
+                nlines += 1;
+
+                // If the import statement contains a colon, split into filename and block names
+                let filename = import_statement.trim_end_matches(':');
+
+                if let Some(next_line) = lines.next() {
+                    let blocks = next_line.split(',').map(str::trim).collect(); //TODO: error here
+                    (filename, Some(blocks))
+                } else {
+                    (filename, None)  // TODO: handle error error fi
+                }
+            } else {
+                // Otherwise, check the next line for block names
+                let filename = import_statement;
+                (filename, None)
+            };
+
+            let imported_file_metadata = get_imported_file_metadata(metadata.clone(), import_filename);
+
+            let import_content = match block_names {
+                Some(blocks) => substitute_some_import_content(import_filename, blocks, imported_file_metadata, import_pos).await,
+                None => {
+                    get_all_imported_content(imported_file_metadata, import_pos).await
+                }
+            };
+
+            match import_content {
+                Ok(content) => {
+                    match check_import_errors(&content, import_filename.to_string(), nlines, import_pos) {
+                        Ok(_response) => result.push_str(&format!("{}\n", content)),  // if no errors, append the content to the result
+                        Err(errors) => {
+                            let error_messages: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();  // TODO: Implement Display for Error
+                            let error_message = error_messages.join(", ");
+                            return Err(ErrorInternalServerError(error_message))
+                        } 
+                    };
+                }
+                Err(errors) => {
+                    let error_messages: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();  // TODO: Implement Display for Error
+                    let error_message = error_messages.join(", ");
+                    return Err(ErrorInternalServerError(error_message));
+                }
+            }
+        } else {
+            result.push_str(&format!("{}\n", line));
+        }
+    }
+
+    Ok(result)
+
+
+}
+
 #[post("/test/grafana")]
 async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
 
@@ -411,7 +495,6 @@ async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebError
         }
     }
 }
-
 
 #[get("/status")]
 async fn status() -> impl Responder {
@@ -469,6 +552,7 @@ async fn main() -> std::io::Result<()> {
             .service(import_test)
             .service(testgrafana)
             .service(import_from_backend)
+            .service(import_some_content)
             .wrap(Logger::default())
     })
     .bind(("0.0.0.0", 8080))?
