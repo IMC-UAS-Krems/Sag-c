@@ -32,6 +32,7 @@ struct DeployPayload {
     source: String,
     user_id: String,
     dashboard_type: String,
+    deployments: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -167,6 +168,9 @@ async fn compile(
             source: deploy_layload.to_string(),
             user_id: input.user_id.clone(),
             dashboard_type: dashboard_type.to_string(),
+            deployments: vec!["Docker".to_string()],
+            // or vec!["Azure".to_string()] for Azure
+            // or vec!["Docker".to_string(), "Azure".to_string()] for both
         };
         let response = deploy(&client, &deploy_url.0, deploy_layload)
             .await
