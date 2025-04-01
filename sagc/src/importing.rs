@@ -1,5 +1,5 @@
 /*
-    This file is to handle import statements.
+    This file handles import statements.
     parse_import_statement: substitutes import statements in the target content with the actual content from the backend.
 */
 
@@ -172,7 +172,7 @@ pub async fn substitute_some_import_content(filename: &str, block_names: Vec<&st
             for block in &block_names {
                 let mut lines = content.lines();
                 let mut block_found = false;
-                
+
                 while let Some(line) = lines.next() {
                     if line.starts_with(block) {
                         block_found = true;
