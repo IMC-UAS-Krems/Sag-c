@@ -24,7 +24,6 @@ use std::env::var;
 
 //-----IMPORTS FOR TESTING------
 use std::fs::File;
-use sagc::preprocessing::{substitute_imports, ImportFileContent, ContentRequest, substitute_imports_from_backend};
 use std::io::Error;
 
 #[derive(Debug, Clone)]
@@ -191,8 +190,12 @@ async fn compile(
 
     dbg!(&input);
 
-    let metadata = FileMetadata::from(input.metadata.clone());
-    let content = parse_import_statement(input.source.as_str(), metadata).await.map_err(|arg0: std::vec::Vec<SagError>| CompileError::General(GeneralError::new("Error message".to_string())))?;
+    let metadata = FileMetadata::from(input.metadata.clone()); 
+
+    let content = parse_import_statement(input.source.as_str(), metadata)
+        .await
+        .map_err(|arg0: std::vec::Vec<SagError>|
+            CompileError::General(GeneralError::new("Error in parsing the content".to_string())))?;
 
     let result = parse_input(&content);
 
@@ -253,9 +256,20 @@ async fn compile(
 /// compiles a grafana dashboard
 #[post("/grafana")]
 async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
+
     let metadata = FileMetadata::from(input.metadata.clone());
 
-    let result = parse_input(input.source.as_str());
+    let content = parse_import_statement(input.source.as_str(), metadata)
+        .await
+        .map_err(|errors| {
+            let error = WebErrorPosition {
+            status: "error".to_string(),
+            errors,
+            };
+            error
+        })?;
+
+    let result = parse_input(&content);
 
     if let Ok(grafana) = result {
         // dbg!(&grafana);
@@ -276,7 +290,17 @@ async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosi
 async fn dash(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
     let metadata = FileMetadata::from(input.metadata.clone());
 
-    let result = parse_input(input.source.as_str());
+    let content = parse_import_statement(input.source.as_str(), metadata)
+        .await
+        .map_err(|errors| {
+            let error = WebErrorPosition {
+            status: "error".to_string(),
+            errors,
+            };
+            error
+        })?;
+
+    let result = parse_input(&content);
 
     if let Ok(dash) = result {
         let dash: Dash = Dash::from(dash);
@@ -362,115 +386,14 @@ async fn import_test(input: web::Json<Input>, client: web::Data<Client>) -> Resu
     Ok(body_string)
 }
 
-/// import content from backend and subtitute it in the target content
-#[post("/test/import_from_backend")]
-async fn import_from_backend(client: web::Data<Client>, input: web::Json<Input>) -> Result<String, actix_web::Error> {
-    match substitute_imports_from_backend(input.source.as_str()).await {
-        Ok(result) => Ok(result),
-        Err(errors) => {
-            let error_messages: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();  // TODO: Implement Display for Error
-            let error_message = error_messages.join(", ");
-            Err(ErrorInternalServerError(error_message))
-        },
-    }
-}
-
-#[post("/test/import_some_content")]
-async fn import_some_content(client: web::Data<Client>, input: web::Json<Input>) -> Result<String, actix_web::Error> {
-
-    let metadata = FileMetadata::from(input.metadata.clone());
-    let mut result = String::new();
-    let mut nlines: usize = 0;
-    let mut lines = input.source.lines();
-
-     // iterate through the lines of the target content
-     while let Some(line) = lines.next() {
-        nlines += 1;
-
-        // if import statement is found
-        if line.starts_with("import") {
-
-            // get the position of the import statement
-            let import_pos = Position { 
-                row_start: nlines, 
-                row_end: nlines, 
-                col_start: 0, 
-                col_end: line.len() 
-            };
-
-            // remove import from the import statement
-            let import_statement = line[6..].trim(); // remove "import" and trim whitesapce
-            let (import_filename, block_names): (&str, Option<Vec<&str>>) = if import_statement.contains(':') {
-                nlines += 1;
-
-                // If the import statement contains a colon, split into filename and block names
-                let filename = import_statement.trim_end_matches(':');
-
-                if let Some(next_line) = lines.next() {
-                    let blocks = next_line.split(',').map(str::trim).collect(); //TODO: error here
-                    (filename, Some(blocks))
-                } else {
-                    (filename, None)  // TODO: handle error error fi
-                }
-            } else {
-                // Otherwise, check the next line for block names
-                let filename = import_statement;
-                (filename, None)
-            };
-
-            let imported_file_metadata = get_imported_file_metadata(metadata.clone(), import_filename);
-
-            let import_content = match block_names {
-                Some(blocks) => substitute_some_import_content(import_filename, blocks, imported_file_metadata, import_pos).await,
-                None => {
-                    get_all_imported_content(imported_file_metadata, import_pos).await
-                }
-            };
-
-            match import_content {
-                Ok(content) => {
-                    match check_import_errors(&content, import_filename.to_string(), nlines, import_pos) {
-                        Ok(_response) => result.push_str(&format!("{}\n", content)),  // if no errors, append the content to the result
-                        Err(errors) => {
-                            let error_messages: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();  // TODO: Implement Display for Error
-                            let error_message = error_messages.join(", ");
-                            return Err(ErrorInternalServerError(error_message))
-                        } 
-                    };
-                }
-                Err(errors) => {
-                    let error_messages: Vec<String> = errors.into_iter().map(|e| e.to_string()).collect();  // TODO: Implement Display for Error
-                    let error_message = error_messages.join(", ");
-                    return Err(ErrorInternalServerError(error_message));
-                }
-            }
-        } else {
-            result.push_str(&format!("{}\n", line));
-        }
-    }
-
-    Ok(result)
-
-
-}
-
 #[post("/test/grafana")]
 async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
 
     let metadata = FileMetadata::from(input.metadata.clone());
 
-    let mut files: Vec<ImportFileContent> = Vec::new(); //mock DB ---> this should be provided in advance
-    files.push(ImportFileContent { name: "BnB", content: "BnB:
-    type is smartcomm-minmaxbarchart-panel
-    source is first
-    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
-    traces -> dateObserved, NOx, O3, NO2" });
-    files.push(ImportFileContent { name: "import", content: "#import mock" }); //mock for nested imports to trigger an error
-
-    match substitute_imports(input.source.as_str(), &files) {
-        Ok(preprocessed_source) => {
-            // Parse the preprocessed input
-            let result = parse_input(&preprocessed_source);
+    match parse_import_statement(input.source.as_str(), metadata).await {
+        Ok(content) => {
+            let result = parse_input(&content);
 
             if let Ok(parsed_config) = result {
                 let g: Grafana = Grafana::from(parsed_config);
@@ -551,8 +474,6 @@ async fn main() -> std::io::Result<()> {
             .service(test)
             .service(import_test)
             .service(testgrafana)
-            .service(import_from_backend)
-            .service(import_some_content)
             .wrap(Logger::default())
     })
     .bind(("0.0.0.0", 8080))?

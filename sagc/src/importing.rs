@@ -6,6 +6,7 @@
 /************************************************************************************************/
 
 use std::fs::File;
+use std::error::Error;
 use std::io::BufRead;
 use std::env::var;
 use actix_web::{web, Error as ActixError, error::ErrorInternalServerError, http::StatusCode};
@@ -96,30 +97,40 @@ pub async fn parse_import_statement(target: &str, metadata: FileMetadata) -> Res
 
             // remove import from the import statement
             let import_statement = line[6..].trim(); // remove "import" and trim whitesapce
-            let (import_filename, block_names): (&str, Option<Vec<&str>>) = if import_statement.contains(':') {
+            let (import_filename, block_names): (&str, Result<Option<Vec<&str>>, SagError>) = if import_statement.contains(':') {
                 nlines += 1;
 
                 // If the import statement contains a colon, split into filename and block names
                 let filename = import_statement.trim_end_matches(':');
 
                 if let Some(next_line) = lines.next() {
-                    let blocks = next_line.split(',').map(str::trim).collect();
-                    (filename, Some(blocks))
+                    // If the next line does not have an indent of 4 spaces or a tab, push error;
+                    if !next_line.starts_with("    ") && !next_line.starts_with("\t") {
+                        let error = SagError::import_error(ImportErrorKind::GeneralError("Invalid indentation of the import statement".to_string()), import_pos);
+                        (filename, Err(error))
+                    } else {
+                        let blocks = next_line.split(',').map(str::trim).collect();
+                        (filename, Ok(Some(blocks)))
+                    }
                 } else {
-                    (filename, None)  // TODO: handle error error
+                    let error = SagError::import_error(ImportErrorKind::GeneralError("Missing block names of the import statement".to_string()), import_pos);
+                    (filename, Err(error))  // TODO: handle error error
                 }
             } else {
-                // Otherwise, check the next line for block names
                 let filename = import_statement;
-                (filename, None)
+                (filename, Ok(None))
             };
 
             let imported_file_metadata = get_imported_file_metadata(metadata.clone(), import_filename);
 
             let import_content = match block_names {
-                Some(blocks) => substitute_some_import_content(import_filename, blocks, imported_file_metadata, import_pos).await,
-                None => {
+                Ok(Some(blocks)) => substitute_some_import_content(import_filename, blocks, imported_file_metadata, import_pos).await,
+                Ok(None) => {
                     get_all_imported_content(imported_file_metadata, import_pos).await
+                }
+                Err(e) => {
+                    errors.push(e);
+                    return Err(errors);
                 }
             };
 

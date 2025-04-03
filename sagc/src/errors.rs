@@ -30,6 +30,7 @@ pub enum ImportErrorKind {
     InternalError(String),
     ParsingErrorImport(String),
     BlockNotFound(String, String),
+    GeneralError(String),
 }
 
 // new
@@ -111,6 +112,7 @@ impl Display for ImportErrorKind {
             ImportErrorKind::InternalError(file) => write!(f, "Internal error in file '{}'",file),
             ImportErrorKind::ParsingErrorImport(file) => write!(f, "Parsing errors in file {}", file),
             ImportErrorKind::BlockNotFound(block, file) => write!(f, "{} not found in file '{}'", block, file),
+            ImportErrorKind::GeneralError(error) => write!(f, "{}", error),
         }
     }
 }
