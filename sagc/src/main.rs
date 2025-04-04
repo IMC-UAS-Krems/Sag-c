@@ -4,7 +4,7 @@ use std::time::Duration;
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::web::{self, Json};
-use actix_web::{get, post, App, HttpServer, Responder, Result};
+use actix_web::{get, post, App, HttpServer, Responder, Result, error::ErrorInternalServerError};
 use awc::http::Uri;
 use awc::Client;
 use rand::seq::IteratorRandom;
@@ -13,19 +13,44 @@ use sagc::dash::Dash;
 use sagc::errors::{CompileError, GeneralError, SagError, WebErrorPosition};
 use sagc::grafana::Grafana;
 use sagc::parser::{parse_input, Position};
+use sagc::importing::{parse_import_statement, substitute_some_import_content, get_all_imported_content, check_import_errors, FileMetadata, get_imported_file_metadata};
 use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
+use sagc::sections::Config;
+
+// ------ new imports from include snippets ----------
+use dotenv::dotenv;
+use std::env::var;
+
+//-----IMPORTS FOR TESTING------
+use std::fs::File;
+use std::io::Error;
 
 #[derive(Debug, Clone)]
 struct GrafanaUri(Uri);
 #[derive(Debug, Clone)]
 struct DeployUri(Uri);
 
+//--------- Edited from Egor's snippets -----------
+
+
 #[derive(Debug, Deserialize, Serialize)]
 struct Input {
     source: String,
     user_id: String,
+    metadata: FileMetadata,
 }
+
+#[derive(Debug, Serialize)]
+struct CheckResponse {
+    status: String,
+    metadata: FileMetadata,
+    content: String,
+}
+
+
+
+//-------------------------------------------------------
 
 #[derive(Debug, Deserialize, Serialize)]
 struct DeployPayload {
@@ -117,20 +142,41 @@ async fn deploy(
     }
 }
 
-#[post("/check")]
-async fn check(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
-    let result = parse_input(input.source.as_str());
+// ------ Endpoints Collection ------
 
-    if let Err(errors) = result {
+/// checks json input for errors
+#[post("/check")]
+async fn check(input: web::Json<Input>) -> Result<impl Responder, actix_web::Error> {
+
+    let metadata = FileMetadata::from(input.metadata.clone()); // get metadata from input
+
+    // if #import is present, substitute the content
+    let content = match parse_import_statement(input.source.as_str(), metadata).await {
+        Ok(result) => result,
+        Err(errors) => {
+            let error = WebErrorPosition {
+                status: "error".to_string(),
+                errors,
+            };
+            return Err(error.into());
+        },
+    };
+
+    let result = parse_input(&content); // parse the content
+
+    // if there are errors, return them
+    if let Err(errors) = result{
         let error = WebErrorPosition {
             status: "error".to_string(),
             errors,
         };
-        return Err(error);
-    }
+        return Err(error.into());
+    };
 
-    Ok(Json(NoErrors {
+    Ok(Json(CheckResponse{
         status: "ok".to_string(),
+        content: content,
+        metadata: input.metadata.clone(),
     }))
 }
 
@@ -141,7 +187,17 @@ async fn compile(
     deploy_url: web::Data<DeployUri>,
     grafana_url: web::Data<GrafanaUri>,
 ) -> Result<impl Responder, CompileError> {
-    let result = parse_input(input.source.as_str());
+
+    dbg!(&input);
+
+    let metadata = FileMetadata::from(input.metadata.clone()); 
+
+    let content = parse_import_statement(input.source.as_str(), metadata)
+        .await
+        .map_err(|arg0: std::vec::Vec<SagError>|
+            CompileError::General(GeneralError::new("Error in parsing the content".to_string())))?;
+
+    let result = parse_input(&content);
 
     if let Ok(config) = result {
         // dbg!(&grafana);
@@ -197,9 +253,23 @@ async fn compile(
     }
 }
 
+/// compiles a grafana dashboard
 #[post("/grafana")]
 async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
-    let result = parse_input(input.source.as_str());
+
+    let metadata = FileMetadata::from(input.metadata.clone());
+
+    let content = parse_import_statement(input.source.as_str(), metadata)
+        .await
+        .map_err(|errors| {
+            let error = WebErrorPosition {
+            status: "error".to_string(),
+            errors,
+            };
+            error
+        })?;
+
+    let result = parse_input(&content);
 
     if let Ok(grafana) = result {
         // dbg!(&grafana);
@@ -215,9 +285,22 @@ async fn grafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosi
     Err(error)
 }
 
+/// compiles a dash dashboard
 #[post("/dash")]
 async fn dash(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
-    let result = parse_input(input.source.as_str());
+    let metadata = FileMetadata::from(input.metadata.clone());
+
+    let content = parse_import_statement(input.source.as_str(), metadata)
+        .await
+        .map_err(|errors| {
+            let error = WebErrorPosition {
+            status: "error".to_string(),
+            errors,
+            };
+            error
+        })?;
+
+    let result = parse_input(&content);
 
     if let Ok(dash) = result {
         let dash: Dash = Dash::from(dash);
@@ -232,6 +315,7 @@ async fn dash(input: web::Json<Input>) -> Result<impl Responder, WebErrorPositio
     Err(error)
 }
 
+/// test error handling
 #[post("/test")]
 async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
     let input = input.source.as_str();
@@ -264,6 +348,75 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
         errors,
     };
     Err(errors)
+}
+
+/// test connectivity to the backend
+#[post("/test/import")]
+async fn import_test(input: web::Json<Input>, client: web::Data<Client>) -> Result<String, actix_web::Error> {
+    let data = FileMetadata {
+        municipalityName: "Krems".into(),
+        orgName: "Imc".into(),
+        projectName: "Project 1".into(),
+        path: "folder-1.file-1".into(),
+    };
+    dotenv::dotenv().ok(); // Load environment variables
+
+    let token = var("WEB_TOKEN").map_err(|e| ErrorInternalServerError(e))?;
+    println!("WEB_TOKEN: {}", token);
+
+    let req_url = "http://localhost:9512/api/document_content";
+    let mut req = client.get(req_url).bearer_auth(&token);
+
+    let query_str = serde_json::to_string(&data).unwrap(); // Debugging
+    println!("Serialized Query Params (not URL-encoded): {}", query_str);
+
+    req = req.query(&data).map_err(|e| ErrorInternalServerError(e))?;
+
+    println!("Sending request to: {}", req_url);
+    println!("BEFORE");
+    let mut res = req.send().await.map_err(|e| ErrorInternalServerError(e))?;
+    println!("AFTER");
+    println!("Response Status: {}", res.status());
+
+    let body_bytes = res.body().await.map_err(|e| ErrorInternalServerError(e))?;
+    let body_string = String::from_utf8(body_bytes.to_vec()).map_err(|e| ErrorInternalServerError(e))?;
+
+    println!("Response Body: {}", body_string);
+
+    Ok(body_string)
+}
+
+#[post("/test/grafana")]
+async fn testgrafana(input: web::Json<Input>) -> Result<impl Responder, WebErrorPosition> {
+
+    let metadata = FileMetadata::from(input.metadata.clone());
+
+    match parse_import_statement(input.source.as_str(), metadata).await {
+        Ok(content) => {
+            let result = parse_input(&content);
+
+            if let Ok(parsed_config) = result {
+                let g: Grafana = Grafana::from(parsed_config);
+                log::info!("Grafana app compiled successfully!");
+                return Ok(Json(g)); // Ensure `Grafana` implements Serialize
+            }
+
+            // If parsing fails, return error
+            let error = WebErrorPosition {
+                status: "error".to_string(),
+                errors: result.err().unwrap(),
+            };
+            Err(error)
+        }
+        Err(errors) => {
+            // Handle preprocessing errors
+            let error = WebErrorPosition {
+                status: "error".to_string(),
+                errors,
+            };
+            Err(error)
+        }
+    }
 }
 
 #[get("/status")]
@@ -319,6 +472,8 @@ async fn main() -> std::io::Result<()> {
             .service(index)
             .service(compile)
             .service(test)
+            .service(import_test)
+            .service(testgrafana)
             .wrap(Logger::default())
     })
     .bind(("0.0.0.0", 8080))?
