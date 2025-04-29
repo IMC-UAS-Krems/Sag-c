@@ -1,0 +1,26 @@
+service:
+    title is Grafana dashboard
+    version is 1.0.0
+    scope is Environment
+
+data:
+    sources -> first
+
+first:
+    type is SmartMeter
+    provider is Dataskop
+    uri is https://backend.dataskop.at/
+    config:
+        measurements:
+            1491 is Würnsdorf_Temperatur
+            1502 is Fadenbach_Temperatur
+        token is E65839fa0ba24f2bbbe8021f0a46a33ff67e388ac74741f59ca2538267b2bf4a
+        company is 12
+
+import file-2:
+    application, SingleLine, deployment
+
+local:
+    uri is https://localhost.org:3000/test
+    port is 50055
+    type is Docker
