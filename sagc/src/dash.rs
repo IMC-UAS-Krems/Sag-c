@@ -69,6 +69,8 @@ struct DashPieChart {
     #[serde(default)]
     pie_chart_type: Option<String>,
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reduce: Option<String>, // New optional field
 }
 
 #[derive(Debug, Serialize)]
@@ -78,6 +80,8 @@ struct DashBarChart {
     source: String,
     traces: Vec<String>,
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reduce: Option<String>, // New optional field
 }
 
 #[derive(Debug, Serialize)]
@@ -269,6 +273,7 @@ impl From<PieChart<'_>> for DashPieChart {
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
             pie_chart_type: value.pie_chart_type.map(|f| f.to_string()),
             name: value.label.to_string(),
+            reduce: value.reduce.map(|s| s.to_string()),
         }
     }
 }
@@ -280,6 +285,7 @@ impl From<BarChart<'_>> for DashBarChart {
             source: value.source.to_string(),
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
             name: value.label.to_string(),
+            reduce: value.reduce.map(|s| s.to_string()),
         }
     }
 }

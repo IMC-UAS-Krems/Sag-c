@@ -181,6 +181,7 @@ pub struct BarChart<'a> {
     pub r#type: PanelType,
     pub source: &'a str,
     pub traces: Vec<&'a str>,
+    pub reduce: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -254,6 +255,7 @@ pub struct PieChart<'a> {
     pub source: &'a str,
     pub traces: Vec<&'a str>,
     pub pie_chart_type: Option<PieChartType>,
+    pub reduce: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -1140,7 +1142,7 @@ impl<'a> GeoMap<'a> {
         let source = parse!(geomap, &str, block_name, "source");
         let data = parse!(geomap, Vec<&str>, block_name, "data");
         let area = parse!(geomap, Option<&str>, block_name, "area");
-        let color_by = parse!(geomap, Option<&str>, block_name, "color_by"); // Parse new field
+        let color_by = parse!(geomap, Option<&str>, block_name, "color_by"); // TODO: Validate this field
 
         // Check if there are any errors in the parsing
         let label = match label {
@@ -1291,6 +1293,7 @@ impl<'a> PieChart<'a> {
             &'a str,
             Vec<&'a str>,
             Option<PieChartType>,
+            Option<&'a str>,
         ),
         Vec<SagError>,
     > {
@@ -1305,6 +1308,7 @@ impl<'a> PieChart<'a> {
         let source = parse!(pieChart, &str, block_name, "source");
         let traces = parse!(pieChart, Vec<&str>, block_name, "traces");
         let pie_chart_type = parse!(pieChart, Option<&str>, block_name, "pie_chart_type");
+        let reduce = parse!(pieChart, Option<&str>, block_name, "reduce"); // TODO: Validate this field
 
         // Check if there are any errors in the parsing
         let pie_chart_type = match pie_chart_type {
@@ -1366,12 +1370,13 @@ impl<'a> PieChart<'a> {
             source.unwrap(),
             traces.unwrap(),
             pie_chart_type,
+            reduce.map(|v| v.0),
         ))
     }
 
     // Create a new PieChart section, return the label, type, source, traces and pie_chart_type
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, traces, pie_chart_type) = PieChart::check(blocks, block_name)?;
+        let (label, r#type, source, traces, pie_chart_type, reduce) = PieChart::check(blocks, block_name)?;
 
         Ok(PieChart {
             label,
@@ -1379,6 +1384,7 @@ impl<'a> PieChart<'a> {
             source,
             traces,
             pie_chart_type,
+            reduce,
         })
     }
 }
@@ -1389,7 +1395,7 @@ impl<'a> BarChart<'a> {
     fn check(
         blocks: &mut Blocks<'a>,
         block_name: &'a str,
-    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
+    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
         let barChart = blocks.get_mut(block_name).unwrap(); // Get the BarChart section
 
@@ -1398,6 +1404,7 @@ impl<'a> BarChart<'a> {
         let r#type = parse!(barChart, &str, block_name, "type");
         let source = parse!(barChart, &str, block_name, "source");
         let traces = parse!(barChart, Vec<&str>, block_name, "traces");
+        let reduce = parse!(barChart, Option<&str>, block_name, "reduce"); // TODO: Validate this field
 
         // Check if there are any errors in the parsing
         let label = match label {
@@ -1447,18 +1454,20 @@ impl<'a> BarChart<'a> {
             r#type.unwrap(),
             source.unwrap(),
             traces.unwrap(),
+            reduce.map(|v| v.0), // TODO: Validate this field
         ))
     }
 
     // Create a new BarChart section, return the label, type, source and traces
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, traces) = BarChart::check(blocks, block_name)?;
+        let (label, r#type, source, traces, reduce) = BarChart::check(blocks, block_name)?;
 
         Ok(BarChart {
             label,
             r#type,
             source,
             traces,
+            reduce,
         })
     }
 }
