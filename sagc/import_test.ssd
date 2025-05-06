@@ -84,11 +84,7 @@ Calendar:
     locations -> Escuelas Aguirre, Arturo Soria, Villaverde
     traces -> dateObserved, CO, NO, NOx, O3
 
-BnB:
-    type is smartcomm-minmaxbarchart-panel
-    source is first
-    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
-    traces -> dateObserved, NOx, O3, NO2
+#import abs
 
 deployment:
     environments -> local

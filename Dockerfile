@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64 rust:1-slim AS build
+FROM rust:1-slim AS build
 
 WORKDIR /app
 COPY . .
