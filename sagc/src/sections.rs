@@ -192,6 +192,7 @@ pub struct GeoMap<'a> {
     pub data: Vec<&'a str>,
     pub area: Option<&'a str>,
     pub color_by: Option<&'a str>,
+    pub geometry_type: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -1129,6 +1130,7 @@ impl<'a> GeoMap<'a> {
             Vec<&'a str>,
             Option<&'a str>,
             Option<&'a str>,
+            Option<&'a str>,
         ),
         Vec<SagError>,
     > {
@@ -1143,6 +1145,17 @@ impl<'a> GeoMap<'a> {
         let data = parse!(geomap, Vec<&str>, block_name, "data");
         let area = parse!(geomap, Option<&str>, block_name, "area");
         let color_by = parse!(geomap, Option<&str>, block_name, "color_by"); // TODO: Validate this field
+        let geometry_type = parse!(geomap, Option<&str>, block_name, "geometry_type"); // TODO: Validate this field
+
+        // Geometry type can only be "polygon" or "point"
+        // if let Some((geom_type, pos)) = geometry_type {
+        //     if geom_type != "polygon" && geom_type != "point" {
+        //         errors.push(SagError::language_error(
+        //             LanguageErrorKind::InvalidValue(geom_type.to_string()),
+        //             pos,
+        //         ));
+        //     }
+        // }
 
         // Check if there are any errors in the parsing
         let label = match label {
@@ -1195,12 +1208,14 @@ impl<'a> GeoMap<'a> {
             data.unwrap(),
             area,
             color_by.map(|v| v.0),
+            geometry_type.map(|v| v.0),
         ))
     }
 
     // Create a new GeoMap section, return the label, type, source, data and area
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, data, area, color_by) = GeoMap::check(blocks, block_name)?;
+        let (label, r#type, source, data, area, color_by, geometry_type) =
+            GeoMap::check(blocks, block_name)?;
         Ok(GeoMap {
             label,
             r#type,
@@ -1208,6 +1223,7 @@ impl<'a> GeoMap<'a> {
             data,
             area,
             color_by,
+            geometry_type,
         })
     }
 }
@@ -1376,7 +1392,8 @@ impl<'a> PieChart<'a> {
 
     // Create a new PieChart section, return the label, type, source, traces and pie_chart_type
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, traces, pie_chart_type, reduce) = PieChart::check(blocks, block_name)?;
+        let (label, r#type, source, traces, pie_chart_type, reduce) =
+            PieChart::check(blocks, block_name)?;
 
         Ok(PieChart {
             label,

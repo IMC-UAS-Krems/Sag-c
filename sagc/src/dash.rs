@@ -58,6 +58,8 @@ struct DashGeoMap {
     area: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")] // Don't serialize if None
     color_by: Option<String>, // New optional field
+    #[serde(skip_serializing_if = "Option::is_none")] // Don't serialize if None
+    geometry_type: Option<String>, // New optional field
 }
 
 #[derive(Debug, Serialize)]
@@ -260,7 +262,8 @@ impl From<GeoMap<'_>> for DashGeoMap {
             data: value.data.iter().map(|f| f.to_string()).collect(),
             name: value.label.to_string(),
             area: value.area.map(|f| f.to_string()),
-            color_by: value.color_by.map(|s| s.to_string()), // Map new field
+            color_by: value.color_by.map(|s| s.to_string()),
+            geometry_type: value.geometry_type.map(|s| s.to_string()),
         }
     }
 }
