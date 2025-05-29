@@ -1,0 +1,37 @@
+service:
+    title is Grafana dashboard
+    version is 1.0.0
+    scope is Environment
+    test:
+        one is one
+        two is two
+
+data:
+    sources -> first
+
+first:
+    type is SmartMeter
+    provider is Fiware
+    uri is https://data.iiss.at/dataskop/fiwarenosec/v2/entities
+    query is AirQualityObserved
+
+application:
+    type is Web
+    dashboard is Grafana
+    layout is SinglePage
+    roles -> User, SuperUser, Admin
+    panels -> MultiLine
+
+MultiLine:
+    type is smartcomm-multiplelinechart-panel
+    source is first
+    locations -> Escuelas Aguirre, Arturo Soria, Villaverde
+    traces -> dateObserved, NOx, O3, NO2
+
+deployment:
+    environments -> local
+
+local:
+    uri is https://localhost.org:3000/test
+    port is 50055
+    type is Docker
