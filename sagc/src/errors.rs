@@ -10,6 +10,22 @@ pub enum SagError {
     LanguageError(LanguageError),
     ParsingError(ParsingError),
     InternalError(String),
+    ImportError(ImportError),
+}
+
+#[derive(Serialize)]
+pub struct ImportError {
+    error: String,
+    line_start: usize,
+    column_start: usize,
+    line_end: usize,
+    column_end: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub enum ImportErrorKind {
+    MissingImport(String),
+    NestedImport(String),
 }
 
 // new
@@ -82,6 +98,15 @@ impl Display for LanguageErrorKind {
     }
 }
 
+impl Display for ImportErrorKind {
+    fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ImportErrorKind::MissingImport(file) => write!(f, "Could not access file '{}'", file),
+            ImportErrorKind::NestedImport(file) => write!(f, "Imported file '{}' contains a nested imports. (Curently nested imports are not supported.)",file),
+        }
+    }
+}
+
 impl SagError {
     pub fn unparsable(position: Position) -> Self {
         SagError::ParsingError(ParsingError::unparsable(position))
@@ -95,6 +120,10 @@ impl SagError {
 
     pub fn internal_error(error: String) -> Self {
         SagError::InternalError(error)
+    }
+    
+    pub fn import_error(error_kind: ImportErrorKind, pos: Position) -> Self {
+        SagError::ImportError(ImportError::new(error_kind, pos))
     }
 }
 
@@ -133,6 +162,18 @@ impl LanguageError {
     }
 }
 
+impl ImportError {
+    fn new(error_kind: ImportErrorKind, pos: Position) -> Self {
+        ImportError {
+            error: error_kind.to_string(),
+            line_start: pos.row_start,
+            column_start: pos.col_start,
+            line_end: pos.row_end,
+            column_end: pos.col_end,
+        }
+    }
+}
+
 impl GeneralError {
     pub fn new(error: String) -> Self {
         GeneralError {
@@ -147,6 +188,7 @@ impl GeneralError {
 impl std::error::Error for ParsingError {}
 impl std::error::Error for LanguageError {}
 impl std::error::Error for SagError {}
+impl std::error::Error for ImportError {}
 
 // impl std::fmt::Display
 
@@ -156,6 +198,7 @@ impl Display for SagError {
             SagError::LanguageError(e) => write!(f, "{}", e),
             SagError::ParsingError(e) => write!(f, "{}", e),
             SagError::InternalError(e) => write!(f, "{}", e),
+            SagError::ImportError(e) => write!(f, "{}", e),
         }
     }
 }
@@ -172,6 +215,16 @@ impl Display for ParsingError {
 }
 
 impl Display for LanguageError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(
+            f,
+            "({}:{} - {}:{}): {}",
+            self.line_start, self.column_start, self.line_end, self.column_end, self.error
+        )
+    }
+}
+
+impl Display for ImportError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(
             f,
@@ -211,6 +264,7 @@ impl Debug for SagError {
             SagError::LanguageError(e) => write!(f, "{:?}", e),
             SagError::ParsingError(e) => write!(f, "{:?}", e),
             SagError::InternalError(e) => write!(f, "{:?}", e),
+            SagError::ImportError(e) => write!(f, "{:?}", e),
         }
     }
 }
@@ -223,6 +277,12 @@ impl Debug for LanguageError {
 
 // new
 impl Debug for ParsingError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl Debug for ImportError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{}", self)
     }
