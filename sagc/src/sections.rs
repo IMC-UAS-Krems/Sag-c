@@ -1146,19 +1146,52 @@ impl<'a> GeoMap<'a> {
         let source = parse!(geomap, &str, block_name, "source");
         let data = parse!(geomap, Vec<&str>, block_name, "data");
         let area = parse!(geomap, Option<&str>, block_name, "area");
-        let color_by = parse!(geomap, Option<&str>, block_name, "color_by"); // TODO: Validate this field
-        let size_by = parse!(geomap, Option<&str>, block_name, "size_by"); // TODO: Validate this field
-        let geometry_type = parse!(geomap, Option<&str>, block_name, "geometry_type"); // TODO: Validate this field
+        let color_by = parse!(geomap, Option<&str>, block_name, "color_by");
+        let size_by = parse!(geomap, Option<&str>, block_name, "size_by");
+        let geometry_type = parse!(geomap, Option<&str>, block_name, "geometry_type");
 
-        // Geometry type can only be "polygon" or "point"
-        // if let Some((geom_type, pos)) = geometry_type {
-        //     if geom_type != "polygon" && geom_type != "point" {
-        //         errors.push(SagError::language_error(
-        //             LanguageErrorKind::InvalidValue(geom_type.to_string()),
-        //             pos,
-        //         ));
-        //     }
-        // }
+        // FIELD-SPECIFIC VALIDATION
+        // Validate geometry_type values
+        if let Some((geom_type, pos)) = geometry_type {
+            let valid_types = ["polygon", "point", "multipolygon"];
+            if !valid_types.contains(&geom_type) {
+                errors.push(SagError::language_error(
+                    LanguageErrorKind::InvalidValue(format!(
+                        "Invalid geometry_type: '{}'. Valid types are: {}",
+                        geom_type,
+                        valid_types.join(", ")
+                    )),
+                    pos,
+                ));
+            }
+        }
+
+        // Validate color_by is used only with point geometry
+        if let (Some((_color_by_val, color_by_pos)), Some((geom_type, _))) =
+            (color_by, geometry_type)
+        {
+            if geom_type != "point" {
+                errors.push(SagError::language_error(
+                    LanguageErrorKind::InvalidValue(
+                        "'color_by' can only be used with geometry_type 'point'".to_string(),
+                    ),
+                    color_by_pos,
+                ));
+            }
+        }
+
+        // Validate size_by is used only with point geometry
+        if let (Some((_size_by_val, size_by_pos)), Some((geom_type, _))) = (size_by, geometry_type)
+        {
+            if geom_type != "point" {
+                errors.push(SagError::language_error(
+                    LanguageErrorKind::InvalidValue(
+                        "'size_by' can only be used with geometry_type 'point'".to_string(),
+                    ),
+                    size_by_pos,
+                ));
+            }
+        }
 
         // Check if there are any errors in the parsing
         let label = match label {
