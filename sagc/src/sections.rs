@@ -192,6 +192,7 @@ pub struct GeoMap<'a> {
     pub data: Vec<&'a str>,
     pub area: Option<&'a str>,
     pub color_by: Option<&'a str>,
+    pub size_by: Option<&'a str>,
     pub geometry_type: Option<&'a str>,
 }
 
@@ -1131,6 +1132,7 @@ impl<'a> GeoMap<'a> {
             Option<&'a str>,
             Option<&'a str>,
             Option<&'a str>,
+            Option<&'a str>,
         ),
         Vec<SagError>,
     > {
@@ -1145,6 +1147,7 @@ impl<'a> GeoMap<'a> {
         let data = parse!(geomap, Vec<&str>, block_name, "data");
         let area = parse!(geomap, Option<&str>, block_name, "area");
         let color_by = parse!(geomap, Option<&str>, block_name, "color_by"); // TODO: Validate this field
+        let size_by = parse!(geomap, Option<&str>, block_name, "size_by"); // TODO: Validate this field
         let geometry_type = parse!(geomap, Option<&str>, block_name, "geometry_type"); // TODO: Validate this field
 
         // Geometry type can only be "polygon" or "point"
@@ -1208,13 +1211,14 @@ impl<'a> GeoMap<'a> {
             data.unwrap(),
             area,
             color_by.map(|v| v.0),
+            size_by.map(|v| v.0),
             geometry_type.map(|v| v.0),
         ))
     }
 
     // Create a new GeoMap section, return the label, type, source, data and area
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, data, area, color_by, geometry_type) =
+        let (label, r#type, source, data, area, color_by, size_by, geometry_type) =
             GeoMap::check(blocks, block_name)?;
         Ok(GeoMap {
             label,
@@ -1223,6 +1227,7 @@ impl<'a> GeoMap<'a> {
             data,
             area,
             color_by,
+            size_by,
             geometry_type,
         })
     }
