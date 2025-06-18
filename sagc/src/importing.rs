@@ -6,10 +6,11 @@
 /************************************************************************************************/
 
 use std::fs::File;
-use std::error::Error;
-use std::io::BufRead;
+// use std::error::Error;
+// use std::io::BufRead;
 use std::env::var;
-use actix_web::{web, Error as ActixError, error::ErrorInternalServerError, http::StatusCode};
+// use actix_web::{web, Error as ActixError, error::ErrorInternalServerError, http::StatusCode};
+use actix_web::web;
 use awc::Client;
 use crate::parser::{Position, parse_lines};
 use crate::errors::{ImportErrorKind, SagError};
@@ -46,6 +47,7 @@ pub struct ImportFileContent {
 }
 
 /// represents the content request to send to the backend
+#[allow(non_snake_case)]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ContentRequest {
     pub municipalityName: String,
@@ -56,6 +58,7 @@ pub struct ContentRequest {
 }
 
 /// represents the metadata of a file
+#[allow(non_snake_case)]
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct FileMetadata {
     pub municipalityName: String,
@@ -233,7 +236,7 @@ pub async fn get_all_imported_content(data: FileMetadata, position: Position) ->
     let client = web::Data::new(Client::default());
 
     let req_url = "http://localhost:9512/api/document_content";
-    let mut req = match client.get(req_url).bearer_auth(&token).query(&data).map_err(|e| SagError::import_error(ImportErrorKind::InternalError(e.to_string()), position)) {
+    let req = match client.get(req_url).bearer_auth(&token).query(&data).map_err(|e| SagError::import_error(ImportErrorKind::InternalError(e.to_string()), position)) {
         Ok(r) => r,
         Err(e) => {
             errors.push(e);
@@ -315,7 +318,7 @@ pub fn check_import_errors(content: &str, filename: String, pos_in_file: usize, 
 
         match result {
             Ok(_) => (),
-            Err(e) => {
+            Err(_e) => {
                 let error_string = filename.to_string();
                 errors.push(SagError::import_error(ImportErrorKind::ParsingErrorImport(error_string), pos));
             }

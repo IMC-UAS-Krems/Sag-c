@@ -1276,6 +1276,7 @@ impl<'a> GrafanaMap<'a> {
         let mut errors = Vec::new();
 
         // Get the GrafanaMap section from the blocks
+        #[allow(non_snake_case)]
         let grafanaMap = blocks.get_mut(block_name).unwrap();
 
         // Parse the type, source and traces
@@ -1354,6 +1355,7 @@ impl<'a> PieChart<'a> {
         let mut errors = Vec::new();
 
         // Get the PieChart section from the blocks
+        #[allow(non_snake_case)]
         let pieChart = blocks.get_mut(block_name).unwrap();
 
         // Parse the label, type, source, traces, pie_chart_type
@@ -1452,6 +1454,7 @@ impl<'a> BarChart<'a> {
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
+        #[allow(non_snake_case)]
         let barChart = blocks.get_mut(block_name).unwrap(); // Get the BarChart section
 
         // Parse the label, type, source, traces
@@ -1535,6 +1538,7 @@ impl<'a> TimeSeries<'a> {
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
+        #[allow(non_snake_case)]
         let timeSeries = blocks.get_mut(block_name).unwrap(); // Get the TimeSeries section
 
         // Parse the label, type, source, traces
@@ -1615,6 +1619,7 @@ impl<'a> XYChart<'a> {
         block_name: &'a str,
     ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
+        #[allow(non_snake_case)]
         let xyChart = blocks.get_mut(block_name).unwrap(); // Get the XYChart section
 
         // Parse the label, type, source, traces
@@ -1695,6 +1700,7 @@ impl<'a> GrafanaSingleLine<'a> {
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
+        #[allow(non_snake_case)]
         let grafanaSingleLine = blocks.get_mut(block_name).unwrap(); // Get the GrafanaSingleLine section
 
         // Parse the type, source, traces
@@ -1761,6 +1767,7 @@ impl<'a> GrafanaMultiLine<'a> {
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
+        #[allow(non_snake_case)]
         let grafanaMultiLine = blocks.get_mut(block_name).unwrap(); // Get the GrafanaMultiLine section
 
         // Parse the type, source, locations, traces
@@ -1841,6 +1848,7 @@ impl<'a> GrafanaExtValues<'a> {
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
+        #[allow(non_snake_case)]
         let grafanaExtraValues = blocks.get_mut(block_name).unwrap(); // Get the GrafanaExtValues section
 
         // Parse the type, source, locations, traces
@@ -1921,6 +1929,7 @@ impl<'a> GrafanaCalendar<'a> {
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
+        #[allow(non_snake_case)]
         let grafanaCalendar = blocks.get_mut(block_name).unwrap(); // Get the GrafanaCalendar section
 
         // Parse the type, source, locations, traces
@@ -2001,6 +2010,7 @@ impl<'a> GrafanaBulletGraph<'a> {
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
+        #[allow(non_snake_case)]
         let grafanaBulletGraph = blocks.get_mut(block_name).unwrap(); // Get the GrafanaBulletGraph section
 
         // Parse the type, source, locations, traces
@@ -2251,6 +2261,7 @@ impl<'a> GrafanaBnB<'a> {
         block_name: &'a str,
     ) -> Result<(PanelType, &'a str, Vec<&'a str>, Vec<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
+        #[allow(non_snake_case)]
         let grafanaBNB = blocks.get_mut(block_name).unwrap(); // Get the GrafanaBnB section
 
         // Parse the type, source, locations, traces

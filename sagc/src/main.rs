@@ -13,18 +13,19 @@ use sagc::dash::Dash;
 use sagc::errors::{CompileError, GeneralError, SagError, WebErrorPosition};
 use sagc::grafana::Grafana;
 use sagc::parser::{parse_input, Position};
-use sagc::importing::{parse_import_statement, substitute_some_import_content, get_all_imported_content, check_import_errors, FileMetadata, get_imported_file_metadata};
+// use sagc::importing::{parse_import_statement, substitute_some_import_content, get_all_imported_content, check_import_errors, FileMetadata, get_imported_file_metadata};
+use sagc::importing::{parse_import_statement, FileMetadata};
 use sagc::sections::DashboardType;
 use serde::{Deserialize, Serialize};
-use sagc::sections::Config;
+// use sagc::sections::Config;
 
 // ------ new imports from include snippets ----------
-use dotenv::dotenv;
+// use dotenv::dotenv;
 use std::env::var;
 
 //-----IMPORTS FOR TESTING------
-use std::fs::File;
-use std::io::Error;
+// use std::fs::File;
+// use std::io::Error;
 
 #[derive(Debug, Clone)]
 struct GrafanaUri(Uri);
@@ -58,13 +59,12 @@ struct DeployPayload {
     user_id: String,
     dashboard_type: String,
     deployments: Vec<String>,
-    deployments: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
-struct NoErrors {
-    status: String,
-}
+// #[derive(Debug, Serialize)]
+// struct NoErrors {
+//     status: String,
+// }
 
 #[derive(Debug, Serialize)]
 struct UrlResponse {
@@ -195,7 +195,7 @@ async fn compile(
 
     let content = parse_import_statement(input.source.as_str(), metadata)
         .await
-        .map_err(|arg0: std::vec::Vec<SagError>|
+        .map_err(|_arg0: std::vec::Vec<SagError>|
             CompileError::General(GeneralError::new("Error in parsing the content".to_string())))?;
 
     let result = parse_input(&content);
@@ -207,12 +207,12 @@ async fn compile(
             DashboardType::Grafana => "grafana",
             DashboardType::Dash => "dash",
         };
-        let deployment_types: Vec<String> = config // Add type annotation here
-            .deployment
-            .environments
-            .values()
-            .map(|env| env.r#type.to_string())
-            .collect();
+        // let deployment_types: Vec<String> = config // Add type annotation here
+        //     .deployment
+        //     .environments
+        //     .values()
+        //     .map(|env| env.r#type.to_string())
+        //     .collect();
 
         let deploy_layload: serde_json::Value = match config.application.dashboard {
             DashboardType::Grafana => {
@@ -355,7 +355,7 @@ async fn test(input: web::Json<Input>) -> Result<String, WebErrorPosition> {
 
 /// test connectivity to the backend
 #[post("/test/import")]
-async fn import_test(input: web::Json<Input>, client: web::Data<Client>) -> Result<String, actix_web::Error> {
+async fn import_test(_input: web::Json<Input>, client: web::Data<Client>) -> Result<String, actix_web::Error> {
     let data = FileMetadata {
         municipalityName: "Krems".into(),
         orgName: "Imc".into(),
