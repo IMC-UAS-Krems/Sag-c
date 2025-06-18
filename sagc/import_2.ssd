@@ -1,0 +1,14 @@
+application:
+    type is Web
+    dashboard is Grafana
+    layout is SinglePage
+    roles -> User, SuperUser, Admin
+    panels -> SingleLine
+
+SingleLine:
+    type is smartcomm-simpleline-panel
+    source is first
+    traces -> Würnsdorf_Temperatur
+
+deployment:
+    environments -> local

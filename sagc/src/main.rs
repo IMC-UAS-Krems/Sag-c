@@ -58,6 +58,7 @@ struct DeployPayload {
     user_id: String,
     dashboard_type: String,
     deployments: Vec<String>,
+    deployments: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -206,7 +207,7 @@ async fn compile(
             DashboardType::Grafana => "grafana",
             DashboardType::Dash => "dash",
         };
-        let deployment_types = config
+        let deployment_types: Vec<String> = config // Add type annotation here
             .deployment
             .environments
             .values()
@@ -232,7 +233,9 @@ async fn compile(
             source: deploy_layload.to_string(),
             user_id: input.user_id.clone(),
             dashboard_type: dashboard_type.to_string(),
-            deployments: deployment_types,
+            deployments: vec!["Docker".to_string()],
+            // or vec!["Azure".to_string()] for Azure
+            // or vec!["Docker".to_string(), "Azure".to_string()] for both
         };
 
         let response = deploy(&client, &deploy_url.0, deploy_layload)
