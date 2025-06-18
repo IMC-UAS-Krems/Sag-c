@@ -10,7 +10,7 @@ RUN apt-get update -y && apt-get install -y pkg-config libssl-dev
 RUN cargo build --locked --release -p sagc
 RUN cargo build --locked --release -p sagc
 
-FROM --platform=linux/arm64 gcr.io/distroless/cc-debian12:latest
+FROM gcr.io/distroless/cc-debian12:latest
 
 WORKDIR /app
 COPY --from=build /app/target/release/sagc .

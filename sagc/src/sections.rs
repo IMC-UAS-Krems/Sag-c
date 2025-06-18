@@ -7,10 +7,10 @@ use nom::multi::separated_list1;
 use nom::IResult;
 
 use std::collections::HashMap;
-use std::fmt::Display;  // Display trait for formatting
-use std::str::FromStr;  // FromStr trait for parsing
+use std::fmt::Display; // Display trait for formatting
+use std::str::FromStr; // FromStr trait for parsing
 
-use url::Url;  // Url type for parsing URLs
+use url::Url; // Url type for parsing URLs
 
 // Custom error types and parsing utilities
 use crate::errors::LanguageErrorKind;
@@ -27,10 +27,10 @@ use crate::parser::Value;
 // Top-level configuration
 #[derive(Debug)]
 pub struct Config<'a> {
-    pub service: Service<'a>, // Setting it to Grafana or Dash dashboard
-    pub data: SagData<'a>, // Where to get the data from
+    pub service: Service<'a>,         // Setting it to Grafana or Dash dashboard
+    pub data: SagData<'a>,            // Where to get the data from
     pub application: Application<'a>, // How to display the data
-    pub deployment: Deployment<'a>,  // Where to deploy the app e.g. local, azure
+    pub deployment: Deployment<'a>,   // Where to deploy the app e.g. local, azure
 }
 
 // Setting service (Grafana or Dash) and version
@@ -78,11 +78,11 @@ pub struct SagData<'a> {
 // Data source details, where to get the data from
 #[derive(Debug)]
 pub struct Datasource<'a> {
-    pub provider: Provider,   
+    pub provider: Provider,
     pub r#type: SourceType,
-    pub uri: Url,  // URL to the data source
-    pub query: Option<&'a str>,   // Filter which data to be fetched from source
-    pub config: Option<DatasourceConfig<'a>>, 
+    pub uri: Url,               // URL to the data source
+    pub query: Option<&'a str>, // Filter which data to be fetched from source
+    pub config: Option<DatasourceConfig<'a>>,
 }
 
 // Who provided the data source
@@ -102,18 +102,18 @@ pub enum SourceType {
 // Additional details for accessing and interpreting the data
 #[derive(Debug)]
 pub struct DatasourceConfig<'a> {
-    pub company: usize,   // Who owns the data
-    pub measurements: HashMap<usize, &'a str>,  // What data is available
-    pub token: &'a str,  // For authentication
+    pub company: usize,                        // Who owns the data
+    pub measurements: HashMap<usize, &'a str>, // What data is available
+    pub token: &'a str,                        // For authentication
 }
 
 // How to display the data
 #[derive(Debug)]
 pub struct Application<'a> {
-    pub r#type: ApplicationType, 
+    pub r#type: ApplicationType,
     pub dashboard: DashboardType,
     pub layout: Layout,
-    pub roles: Vec<&'a str>,  // Who can access the dashboard
+    pub roles: Vec<&'a str>, // Who can access the dashboard
     // forms of visualizations e.g. pie chart, map, etc..
     pub panels: HashMap<&'a str, PanelTypeUnion<'a>>, // called 'visualizations' for Dash, e.g. <name>: <visualization>
 }
@@ -170,7 +170,7 @@ pub enum PanelType {
     GrafanaSingleLine,
     PieChart,
     TimeSeries,
-    XYChart,   
+    XYChart,
 }
 
 // -----------Panel Types-----------
@@ -181,6 +181,7 @@ pub struct BarChart<'a> {
     pub r#type: PanelType,
     pub source: &'a str,
     pub traces: Vec<&'a str>,
+    pub reduce: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -190,6 +191,9 @@ pub struct GeoMap<'a> {
     pub source: &'a str,
     pub data: Vec<&'a str>,
     pub area: Option<&'a str>,
+    pub color_by: Option<&'a str>,
+    pub size_by: Option<&'a str>,
+    pub geometry_type: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -253,6 +257,7 @@ pub struct PieChart<'a> {
     pub source: &'a str,
     pub traces: Vec<&'a str>,
     pub pie_chart_type: Option<PieChartType>,
+    pub reduce: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -295,7 +300,7 @@ pub struct Environment<'a> {
 
 #[derive(Debug)]
 pub enum EnvironmentType {
-    Docker, 
+    Docker,
     Azure,
 }
 
@@ -358,7 +363,7 @@ impl<'a> Config<'a> {
         //Config::validate(&config)?; // TODO: delete?
 
         // Return the configuration if there are no errors
-        Ok(config) 
+        Ok(config)
     }
 
     // TODO: Will this stay here?
@@ -382,14 +387,15 @@ impl<'a> Config<'a> {
     //}
 
     // Iterates over the panels and keep only panels that pass the filter
-    pub fn filter_panels<F>(&mut self, filter: F) 
-    where F: Fn(&PanelTypeUnion) -> bool, {
+    pub fn filter_panels<F>(&mut self, filter: F)
+    where
+        F: Fn(&PanelTypeUnion) -> bool,
+    {
         self.application.panels.retain(|_, panel| filter(panel));
     }
 }
 
 impl<'a> Service<'a> {
-
     // Check if the service section is correctly defined
     // Return the title, scope and version or errors if there are any
     fn check(blocks: &mut Blocks<'a>) -> Result<(&'a str, Scope, Version), Vec<SagError>> {
@@ -403,7 +409,7 @@ impl<'a> Service<'a> {
                 "Missing section {}",
                 SECTION_NAME
             )));
-        
+
         // If there is an error, return it
         if let Err(e) = service {
             errors.push(e);
@@ -487,7 +493,6 @@ impl<'a> Service<'a> {
 }
 
 impl<'a> SagData<'a> {
-
     // Check if the data section is correctly defined
     // Return the data sources or errors if there are any
     fn check(blocks: &mut Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
@@ -521,7 +526,7 @@ impl<'a> SagData<'a> {
 
         // Parse the data sources
         let data_sources = parse!(data, Vec<&str>, SECTION_NAME, "sources");
-        
+
         // If there are any errors in the parsing, return them
         if let Err(e) = data_sources {
             errors.push(e);
@@ -568,20 +573,22 @@ impl<'a> SagData<'a> {
 }
 
 impl<'a> Datasource<'a> {
-
     // Check if the datasource section is correctly defined
     // Return the provider, type, uri, query, config or errors if there are any
     fn check(
         blocks: &mut Blocks<'a>,
         source_name: &'a str,
         source_name_position: Position,
-    ) -> Result< (
-        Provider,
-        SourceType,
-        Url,
-        Option<&'a str>,
-        Option<DatasourceConfig<'a>>,
-    ), Vec<SagError>> {
+    ) -> Result<
+        (
+            Provider,
+            SourceType,
+            Url,
+            Option<&'a str>,
+            Option<DatasourceConfig<'a>>,
+        ),
+        Vec<SagError>,
+    > {
         let mut errors = Vec::new();
 
         // Get the datasource section from the blocks
@@ -708,7 +715,6 @@ impl<'a> Datasource<'a> {
         source_name: &'a str,
         source_name_position: Position,
     ) -> Result<Self, Vec<SagError>> {
-
         // Check if the datasource section is correctly defined
         let (provider, r#type, uri, query, config) =
             Datasource::check(blocks, source_name, source_name_position)?;
@@ -725,7 +731,6 @@ impl<'a> Datasource<'a> {
 }
 
 impl<'a> DatasourceConfig<'a> {
-
     // Check if the config section is correctly defined
     // Return the company, measurements and token or errors if there are any
     fn check(
@@ -733,7 +738,7 @@ impl<'a> DatasourceConfig<'a> {
     ) -> Result<Option<(usize, HashMap<usize, &'a str>, &'a str)>, Vec<SagError>> {
         const SECTION_NAME: &str = "config";
         let mut errors = Vec::new();
-        
+
         // Get the datasource section
         let datasource = match &mut datasource.value {
             Value::Block(block) => block,
@@ -802,7 +807,6 @@ impl<'a> DatasourceConfig<'a> {
 
     // Create a new config section, return the company, measurements and token
     pub fn new(block: &mut ParseResult<'a>) -> Result<Option<Self>, Vec<SagError>> {
-        
         // Check if the config section is correctly defined
         let result = DatasourceConfig::check(block)?;
 
@@ -819,19 +823,20 @@ impl<'a> DatasourceConfig<'a> {
 }
 
 impl<'a> Application<'a> {
-
     // Check if the application section is correctly defined
     // Return the type, dashboard, layout, roles, panels or errors if there are any
-    fn check (
+    fn check(
         blocks: &mut Blocks<'a>,
-    ) -> Result< (
-        ApplicationType,
-        DashboardType,
-        Layout,
-        Vec<&'a str>,
-        (Vec<&'a str>, Position),
-    ), Vec<SagError>> {
-
+    ) -> Result<
+        (
+            ApplicationType,
+            DashboardType,
+            Layout,
+            Vec<&'a str>,
+            (Vec<&'a str>, Position),
+        ),
+        Vec<SagError>,
+    > {
         const SECTION_NAME: &str = "application";
         let mut errors = Vec::new();
 
@@ -842,7 +847,7 @@ impl<'a> Application<'a> {
                 "Missing section {}",
                 SECTION_NAME
             )));
-        
+
         // If there is an error, return it
         if let Err(e) = application {
             errors.push(e);
@@ -859,7 +864,7 @@ impl<'a> Application<'a> {
             ));
             return Err(errors);
         }
-        
+
         // Parse the type, dashboard, layout, roles and panels
         let r#type = parse!(application, &str, SECTION_NAME, "type");
         let dashboard = parse!(application, &str, SECTION_NAME, "dashboard");
@@ -989,10 +994,10 @@ impl<'a> Application<'a> {
                     if !matches!(
                         panel,
                         PanelTypeUnion::PieChart(_)
-                        | PanelTypeUnion::TimeSeries(_)
-                        | PanelTypeUnion::BarChart(_)
-                        | PanelTypeUnion::GeoMap(_)
-                        | PanelTypeUnion::XYChart(_)
+                            | PanelTypeUnion::TimeSeries(_)
+                            | PanelTypeUnion::BarChart(_)
+                            | PanelTypeUnion::GeoMap(_)
+                            | PanelTypeUnion::XYChart(_)
                     ) {
                         errors.push(SagError::language_error(
                             LanguageErrorKind::InvalidPanelType(panel.to_string()),
@@ -1011,7 +1016,6 @@ impl<'a> Application<'a> {
 }
 
 impl<'a> PanelTypeUnion<'a> {
-
     // Check if the panel type is correctly defined
     // Return the panel type or errors if there are any
     fn check(
@@ -1114,15 +1118,25 @@ impl<'a> PanelTypeUnion<'a> {
 }
 
 impl<'a> GeoMap<'a> {
-
     // Check if the GeoMap section is correctly defined
     // Return the label, type, source, data, area or errors if there are any
     fn check(
         blocks: &mut Blocks<'a>,
         block_name: &'a str,
-    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
+    ) -> Result<
+        (
+            &'a str,
+            PanelType,
+            &'a str,
+            Vec<&'a str>,
+            Option<&'a str>,
+            Option<&'a str>,
+            Option<&'a str>,
+            Option<&'a str>,
+        ),
+        Vec<SagError>,
+    > {
         let mut errors = Vec::new();
-
         // Get the GeoMap section from the blocks
         let geomap = blocks.get_mut(block_name).unwrap();
 
@@ -1132,6 +1146,52 @@ impl<'a> GeoMap<'a> {
         let source = parse!(geomap, &str, block_name, "source");
         let data = parse!(geomap, Vec<&str>, block_name, "data");
         let area = parse!(geomap, Option<&str>, block_name, "area");
+        let color_by = parse!(geomap, Option<&str>, block_name, "color_by");
+        let size_by = parse!(geomap, Option<&str>, block_name, "size_by");
+        let geometry_type = parse!(geomap, Option<&str>, block_name, "geometry_type");
+
+        // FIELD-SPECIFIC VALIDATION
+        // Validate geometry_type values
+        if let Some((geom_type, pos)) = geometry_type {
+            let valid_types = ["polygon", "point", "multipolygon"];
+            if !valid_types.contains(&geom_type) {
+                errors.push(SagError::language_error(
+                    LanguageErrorKind::InvalidValue(format!(
+                        "Invalid geometry_type: '{}'. Valid types are: {}",
+                        geom_type,
+                        valid_types.join(", ")
+                    )),
+                    pos,
+                ));
+            }
+        }
+
+        // Validate color_by is used only with point geometry
+        if let (Some((_color_by_val, color_by_pos)), Some((geom_type, _))) =
+            (color_by, geometry_type)
+        {
+            if geom_type != "point" {
+                errors.push(SagError::language_error(
+                    LanguageErrorKind::InvalidValue(
+                        "'color_by' can only be used with geometry_type 'point'".to_string(),
+                    ),
+                    color_by_pos,
+                ));
+            }
+        }
+
+        // Validate size_by is used only with point geometry
+        if let (Some((_size_by_val, size_by_pos)), Some((geom_type, _))) = (size_by, geometry_type)
+        {
+            if geom_type != "point" {
+                errors.push(SagError::language_error(
+                    LanguageErrorKind::InvalidValue(
+                        "'size_by' can only be used with geometry_type 'point'".to_string(),
+                    ),
+                    size_by_pos,
+                ));
+            }
+        }
 
         // Check if there are any errors in the parsing
         let label = match label {
@@ -1183,25 +1243,30 @@ impl<'a> GeoMap<'a> {
             source.unwrap(),
             data.unwrap(),
             area,
+            color_by.map(|v| v.0),
+            size_by.map(|v| v.0),
+            geometry_type.map(|v| v.0),
         ))
     }
 
     // Create a new GeoMap section, return the label, type, source, data and area
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, data, area) = GeoMap::check(blocks, block_name)?;
-
+        let (label, r#type, source, data, area, color_by, size_by, geometry_type) =
+            GeoMap::check(blocks, block_name)?;
         Ok(GeoMap {
             label,
             r#type,
             source,
             data,
             area,
+            color_by,
+            size_by,
+            geometry_type,
         })
     }
 }
 
 impl<'a> GrafanaMap<'a> {
-
     // Check if the GrafanaMap section is correctly defined
     // Return the type, source, traces or errors if there are any
     fn check(
@@ -1270,19 +1335,22 @@ impl<'a> GrafanaMap<'a> {
 }
 
 impl<'a> PieChart<'a> {
-
     // Check if the PieChart section is correctly defined
     // Return the label, type, source, traces, pie_chart_type or errors if there are any
     fn check(
         blocks: &mut Blocks<'a>,
         block_name: &'a str,
-    ) -> Result <(
-        &'a str,
-        PanelType,
-        &'a str,
-        Vec<&'a str>,
-        Option<PieChartType>,
-    ), Vec<SagError>> {
+    ) -> Result<
+        (
+            &'a str,
+            PanelType,
+            &'a str,
+            Vec<&'a str>,
+            Option<PieChartType>,
+            Option<&'a str>,
+        ),
+        Vec<SagError>,
+    > {
         let mut errors = Vec::new();
 
         // Get the PieChart section from the blocks
@@ -1294,6 +1362,7 @@ impl<'a> PieChart<'a> {
         let source = parse!(pieChart, &str, block_name, "source");
         let traces = parse!(pieChart, Vec<&str>, block_name, "traces");
         let pie_chart_type = parse!(pieChart, Option<&str>, block_name, "pie_chart_type");
+        let reduce = parse!(pieChart, Option<&str>, block_name, "reduce"); // TODO: Validate this field
 
         // Check if there are any errors in the parsing
         let pie_chart_type = match pie_chart_type {
@@ -1346,7 +1415,7 @@ impl<'a> PieChart<'a> {
         // If there are any errors, return them
         if !errors.is_empty() {
             return Err(errors);
-        }  
+        }
 
         // Return the label, type, source, traces and pie_chart_type
         Ok((
@@ -1355,12 +1424,14 @@ impl<'a> PieChart<'a> {
             source.unwrap(),
             traces.unwrap(),
             pie_chart_type,
+            reduce.map(|v| v.0),
         ))
     }
 
     // Create a new PieChart section, return the label, type, source, traces and pie_chart_type
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, traces, pie_chart_type) = PieChart::check(blocks, block_name)?;
+        let (label, r#type, source, traces, pie_chart_type, reduce) =
+            PieChart::check(blocks, block_name)?;
 
         Ok(PieChart {
             label,
@@ -1368,18 +1439,18 @@ impl<'a> PieChart<'a> {
             source,
             traces,
             pie_chart_type,
+            reduce,
         })
     }
 }
 
 impl<'a> BarChart<'a> {
-
     // Check if the BarChart section is correctly defined
     // Return the label, type, source, traces or errors if there are any
     fn check(
         blocks: &mut Blocks<'a>,
         block_name: &'a str,
-    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
+    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
         let barChart = blocks.get_mut(block_name).unwrap(); // Get the BarChart section
 
@@ -1388,6 +1459,7 @@ impl<'a> BarChart<'a> {
         let r#type = parse!(barChart, &str, block_name, "type");
         let source = parse!(barChart, &str, block_name, "source");
         let traces = parse!(barChart, Vec<&str>, block_name, "traces");
+        let reduce = parse!(barChart, Option<&str>, block_name, "reduce"); // TODO: Validate this field
 
         // Check if there are any errors in the parsing
         let label = match label {
@@ -1437,24 +1509,25 @@ impl<'a> BarChart<'a> {
             r#type.unwrap(),
             source.unwrap(),
             traces.unwrap(),
+            reduce.map(|v| v.0), // TODO: Validate this field
         ))
     }
 
     // Create a new BarChart section, return the label, type, source and traces
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, traces) = BarChart::check(blocks, block_name)?;
+        let (label, r#type, source, traces, reduce) = BarChart::check(blocks, block_name)?;
 
         Ok(BarChart {
             label,
             r#type,
             source,
             traces,
+            reduce,
         })
     }
 }
 
 impl<'a> TimeSeries<'a> {
-
     // Check if the TimeSeries section is correctly defined
     // Return the label, type, source, traces or errors if there are any
     fn check(
@@ -1535,7 +1608,6 @@ impl<'a> TimeSeries<'a> {
 }
 
 impl<'a> XYChart<'a> {
-
     // Check if the XYChart section is correctly defined
     // Return the label, type, source, traces or errors if there are any
     fn check(
@@ -1616,7 +1688,6 @@ impl<'a> XYChart<'a> {
 }
 
 impl<'a> GrafanaSingleLine<'a> {
-
     // Check if the GrafanaSingleLine section is correctly defined
     // Return the type, source, traces or errors if there are any
     fn check(
@@ -1683,7 +1754,6 @@ impl<'a> GrafanaSingleLine<'a> {
 }
 
 impl<'a> GrafanaMultiLine<'a> {
-
     // Check if the GrafanaMultiLine section is correctly defined
     // Return the type, source, locations, traces or errors if there are any
     fn check(
@@ -1764,7 +1834,6 @@ impl<'a> GrafanaMultiLine<'a> {
 }
 
 impl<'a> GrafanaExtValues<'a> {
-
     // Check if the GrafanaExtValues section is correctly defined
     // Return the type, source, locations, traces or errors if there are any
     fn check(
@@ -1845,7 +1914,6 @@ impl<'a> GrafanaExtValues<'a> {
 }
 
 impl<'a> GrafanaCalendar<'a> {
-
     // Check if the GrafanaCalendar section is correctly defined
     // Return the type, source, locations, traces or errors if there are any
     fn check(
@@ -1926,7 +1994,6 @@ impl<'a> GrafanaCalendar<'a> {
 }
 
 impl<'a> GrafanaBulletGraph<'a> {
-
     // Check if the GrafanaBulletGraph section is correctly defined
     // Return the type, source, locations, traces or errors if there are any
     fn check(
@@ -2008,7 +2075,6 @@ impl<'a> GrafanaBulletGraph<'a> {
 }
 
 impl<'a> Deployment<'a> {
-
     // Check if the Deployment section is correctly defined
     // Return the environments or errors if there are any
     fn check(blocks: &mut Blocks<'a>) -> Result<(Vec<&'a str>, Position), Vec<SagError>> {
@@ -2021,7 +2087,7 @@ impl<'a> Deployment<'a> {
             .ok_or(SagError::internal_error(format!(
                 "Missing section {SECTION_NAME}"
             )));
-        
+
         // Check if there are any errors in the parsing
         if let Err(e) = deployment {
             errors.push(e);
@@ -2081,7 +2147,6 @@ impl<'a> Deployment<'a> {
 }
 
 impl<'a> Environment<'a> {
-
     // Check if the Environment section is correctly defined
     // Return the uri, port, type or errors if there are any
     fn check(
@@ -2179,7 +2244,6 @@ impl<'a> Environment<'a> {
 }
 
 impl<'a> GrafanaBnB<'a> {
-
     // Check if the GrafanaBnB section is correctly defined
     // Return the type, source, locations, traces or errors if there are any
     fn check(
@@ -2340,7 +2404,6 @@ impl<'a> Panel for PanelTypeUnion<'a> {
         }
     }
 }
-
 
 // -----------Section 4: FromStr Implementations------------
 // FromStr implementations
