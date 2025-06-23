@@ -56,6 +56,7 @@ struct DashGeoMap {
     data: Vec<String>,
     name: String,
     area: Option<String>,
+    filter_by: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -67,6 +68,7 @@ struct DashPieChart {
     #[serde(default)]
     pie_chart_type: Option<String>,
     name: String,
+    filter_by: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -76,6 +78,7 @@ struct DashBarChart {
     source: String,
     traces: Vec<String>,
     name: String,
+    filter_by: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -85,6 +88,7 @@ struct DashTimeSeries {
     source: String,
     traces: Vec<String>,
     name: String,
+    filter_by: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -94,6 +98,7 @@ struct DashXYChart {
     source: String,
     traces: Vec<String>,
     name: String,
+    filter_by: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -254,6 +259,7 @@ impl From<GeoMap<'_>> for DashGeoMap {
             data: value.data.iter().map(|f| f.to_string()).collect(),
             name: value.label.to_string(),
             area: value.area.map(|f| f.to_string()),
+            filter_by: value.filter_by.map(|f| f.to_string()),
         }
     }
 }
@@ -266,6 +272,7 @@ impl From<PieChart<'_>> for DashPieChart {
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
             pie_chart_type: value.pie_chart_type.map(|f| f.to_string()),
             name: value.label.to_string(),
+            filter_by: value.filter_by.map(|f| f.to_string()),
         }
     }
 }
@@ -277,6 +284,7 @@ impl From<BarChart<'_>> for DashBarChart {
             source: value.source.to_string(),
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
             name: value.label.to_string(),
+            filter_by: value.filter_by.map(|f| f.to_string()),
         }
     }
 }
@@ -288,6 +296,7 @@ impl From<TimeSeries<'_>> for DashTimeSeries {
             source: value.source.to_string(),
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
             name: value.label.to_string(),
+            filter_by: value.filter_by.map(|f| f.to_string()),
         }
     }
 }
@@ -299,6 +308,7 @@ impl From<XYChart<'_>> for DashXYChart {
             source: value.source.to_string(),
             traces: value.traces.iter().map(|f| f.to_string()).collect(),
             name: value.label.to_string(),
+            filter_by: value.filter_by.map(|f| f.to_string()),
         }
     }
 }

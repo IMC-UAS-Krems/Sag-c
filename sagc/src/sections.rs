@@ -181,6 +181,7 @@ pub struct BarChart<'a> {
     pub r#type: PanelType,
     pub source: &'a str,
     pub traces: Vec<&'a str>,
+    pub filter_by: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -190,6 +191,7 @@ pub struct GeoMap<'a> {
     pub source: &'a str,
     pub data: Vec<&'a str>,
     pub area: Option<&'a str>,
+    pub filter_by: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -253,6 +255,7 @@ pub struct PieChart<'a> {
     pub source: &'a str,
     pub traces: Vec<&'a str>,
     pub pie_chart_type: Option<PieChartType>,
+    pub filter_by: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -267,6 +270,7 @@ pub struct TimeSeries<'a> {
     pub r#type: PanelType,
     pub source: &'a str,
     pub traces: Vec<&'a str>,
+    pub filter_by: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -275,6 +279,7 @@ pub struct XYChart<'a> {
     pub r#type: PanelType,
     pub source: &'a str,
     pub traces: Vec<&'a str>,
+    pub filter_by: Option<&'a str>,
 }
 
 // -----------End of Panel Types-----------
@@ -1120,7 +1125,7 @@ impl<'a> GeoMap<'a> {
     fn check(
         blocks: &mut Blocks<'a>,
         block_name: &'a str,
-    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
+    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>, Option<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
 
         // Get the GeoMap section from the blocks
@@ -1132,6 +1137,7 @@ impl<'a> GeoMap<'a> {
         let source = parse!(geomap, &str, block_name, "source");
         let data = parse!(geomap, Vec<&str>, block_name, "data");
         let area = parse!(geomap, Option<&str>, block_name, "area");
+        let filter_by = parse!(geomap, Option<&str>, block_name, "filter_by");
 
         // Check if there are any errors in the parsing
         let label = match label {
@@ -1170,6 +1176,10 @@ impl<'a> GeoMap<'a> {
             }
         };
         let area = area.map(|area| area.0);
+        let filter_by = match filter_by {
+            Some((filter_by, _)) => Some(filter_by),
+            None => None,
+        };
 
         // If there are any errors, return them
         if !errors.is_empty() {
@@ -1183,12 +1193,13 @@ impl<'a> GeoMap<'a> {
             source.unwrap(),
             data.unwrap(),
             area,
+            filter_by,
         ))
     }
 
     // Create a new GeoMap section, return the label, type, source, data and area
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, data, area) = GeoMap::check(blocks, block_name)?;
+        let (label, r#type, source, data, area, filter_by) = GeoMap::check(blocks, block_name)?;
 
         Ok(GeoMap {
             label,
@@ -1196,6 +1207,7 @@ impl<'a> GeoMap<'a> {
             source,
             data,
             area,
+            filter_by,
         })
     }
 }
@@ -1282,6 +1294,7 @@ impl<'a> PieChart<'a> {
         &'a str,
         Vec<&'a str>,
         Option<PieChartType>,
+        Option<&'a str>,
     ), Vec<SagError>> {
         let mut errors = Vec::new();
 
@@ -1294,6 +1307,7 @@ impl<'a> PieChart<'a> {
         let source = parse!(pieChart, &str, block_name, "source");
         let traces = parse!(pieChart, Vec<&str>, block_name, "traces");
         let pie_chart_type = parse!(pieChart, Option<&str>, block_name, "pie_chart_type");
+        let filter_by = parse!(pieChart, Option<&str>, block_name, "filter_by");
 
         // Check if there are any errors in the parsing
         let pie_chart_type = match pie_chart_type {
@@ -1342,6 +1356,11 @@ impl<'a> PieChart<'a> {
                 None
             }
         };
+        
+        let filter_by = match filter_by {
+            Some((filter_by, _)) => Some(filter_by),
+            None => None,
+        };
 
         // If there are any errors, return them
         if !errors.is_empty() {
@@ -1355,12 +1374,13 @@ impl<'a> PieChart<'a> {
             source.unwrap(),
             traces.unwrap(),
             pie_chart_type,
+            filter_by
         ))
     }
 
     // Create a new PieChart section, return the label, type, source, traces and pie_chart_type
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, traces, pie_chart_type) = PieChart::check(blocks, block_name)?;
+        let (label, r#type, source, traces, pie_chart_type, filter_by) = PieChart::check(blocks, block_name)?;
 
         Ok(PieChart {
             label,
@@ -1368,6 +1388,7 @@ impl<'a> PieChart<'a> {
             source,
             traces,
             pie_chart_type,
+            filter_by,
         })
     }
 }
@@ -1379,7 +1400,7 @@ impl<'a> BarChart<'a> {
     fn check(
         blocks: &mut Blocks<'a>,
         block_name: &'a str,
-    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
+    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
         let barChart = blocks.get_mut(block_name).unwrap(); // Get the BarChart section
 
@@ -1388,6 +1409,7 @@ impl<'a> BarChart<'a> {
         let r#type = parse!(barChart, &str, block_name, "type");
         let source = parse!(barChart, &str, block_name, "source");
         let traces = parse!(barChart, Vec<&str>, block_name, "traces");
+        let filter_by = parse!(barChart, Option<&str>, block_name, "filter_by");
 
         // Check if there are any errors in the parsing
         let label = match label {
@@ -1425,6 +1447,10 @@ impl<'a> BarChart<'a> {
                 None
             }
         };
+        let filter_by = match filter_by {
+            Some((filter_by, _)) => Some(filter_by),
+            None => None,
+        };
 
         // If there are any errors, return them
         if !errors.is_empty() {
@@ -1437,18 +1463,20 @@ impl<'a> BarChart<'a> {
             r#type.unwrap(),
             source.unwrap(),
             traces.unwrap(),
+            filter_by,
         ))
     }
 
     // Create a new BarChart section, return the label, type, source and traces
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, traces) = BarChart::check(blocks, block_name)?;
+        let (label, r#type, source, traces, filter_by) = BarChart::check(blocks, block_name)?;
 
         Ok(BarChart {
             label,
             r#type,
             source,
             traces,
+            filter_by,
         })
     }
 }
@@ -1460,7 +1488,7 @@ impl<'a> TimeSeries<'a> {
     fn check(
         blocks: &mut Blocks<'a>,
         block_name: &'a str,
-    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
+    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
         let timeSeries = blocks.get_mut(block_name).unwrap(); // Get the TimeSeries section
 
@@ -1469,6 +1497,7 @@ impl<'a> TimeSeries<'a> {
         let r#type = parse!(timeSeries, &str, block_name, "type");
         let source = parse!(timeSeries, &str, block_name, "source");
         let traces = parse!(timeSeries, Vec<&str>, block_name, "traces");
+        let filter_by = parse!(timeSeries, Option<&str>, block_name, "filter_by");
 
         // Check if there are any errors in the parsing
         let label = match label {
@@ -1506,6 +1535,10 @@ impl<'a> TimeSeries<'a> {
                 None
             }
         };
+        let filter_by = match filter_by {
+            Some((filter_by, _)) => Some(filter_by),
+            None => None,
+        };
 
         // If there are any errors, return them
         if !errors.is_empty() {
@@ -1518,18 +1551,20 @@ impl<'a> TimeSeries<'a> {
             r#type.unwrap(),
             source.unwrap(),
             traces.unwrap(),
+            filter_by,
         ))
     }
 
     // Create a new TimeSeries section, return the label, type, source and traces
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, traces) = TimeSeries::check(blocks, block_name)?;
+        let (label, r#type, source, traces, filter_by) = TimeSeries::check(blocks, block_name)?;
 
         Ok(TimeSeries {
             label,
             r#type,
             source,
             traces,
+            filter_by,
         })
     }
 }
@@ -1541,7 +1576,7 @@ impl<'a> XYChart<'a> {
     fn check(
         blocks: &mut Blocks<'a>,
         block_name: &'a str,
-    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>), Vec<SagError>> {
+    ) -> Result<(&'a str, PanelType, &'a str, Vec<&'a str>, Option<&'a str>), Vec<SagError>> {
         let mut errors = Vec::new();
         let xyChart = blocks.get_mut(block_name).unwrap(); // Get the XYChart section
 
@@ -1550,6 +1585,7 @@ impl<'a> XYChart<'a> {
         let r#type = parse!(xyChart, &str, block_name, "type");
         let source = parse!(xyChart, &str, block_name, "source");
         let traces = parse!(xyChart, Vec<&str>, block_name, "traces");
+        let filter_by = parse!(xyChart, Option<&str>, block_name, "filter_by");
 
         // Check if there are any errors in the parsing
         let label = match label {
@@ -1587,6 +1623,10 @@ impl<'a> XYChart<'a> {
                 None
             }
         };
+        let filter_by = match filter_by {
+            Some((filter_by, _)) => Some(filter_by),
+            None => None,
+        };
 
         // If there are any errors, return them
         if !errors.is_empty() {
@@ -1599,18 +1639,20 @@ impl<'a> XYChart<'a> {
             r#type.unwrap(),
             source.unwrap(),
             traces.unwrap(),
+            filter_by,
         ))
     }
 
     // Create a new XYChart section, return the label, type, source and traces
     pub fn new(blocks: &mut Blocks<'a>, block_name: &'a str) -> Result<Self, Vec<SagError>> {
-        let (label, r#type, source, traces) = XYChart::check(blocks, block_name)?;
+        let (label, r#type, source, traces, filter_by) = XYChart::check(blocks, block_name)?;
 
         Ok(XYChart {
             label,
             r#type,
             source,
             traces,
+            filter_by,
         })
     }
 }

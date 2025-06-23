@@ -38,17 +38,20 @@ XY:
     type is xy_chart
     source is airquality
     traces -> dateObserved, NO, NO2, O3, PM2.5, SO2, CO, id
+    filter_by is stationName
 
 TS:
     label is Time Series
     type is timeseries
     source is airquality
     traces -> dateObserved, NO, NO2, O3, PM2.5, SO2, CO, id
+    filter_by is stationName
 
 Bar:
     label is Pollutant Bar Chart
     type is bar_chart
     source is airquality
+    filter_by is stationName
     traces -> dateObserved, NO, NO2, O3, PM2.5, SO2, CO, id
 
 deployment:
